@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, ContextTypes
 import random
 import logging
@@ -75,6 +75,15 @@ async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(howto_message)
 
+# Command handler for /miniapp
+async def mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Create a button to open the Mini App
+    keyboard = [
+        [InlineKeyboardButton("فتح تطبيق الميني", web_app={"url": "https://ta7diga-mini-app.vercel.app/"})]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("انقر على الزر أدناه لفتح تطبيق الميني:", reply_markup=reply_markup)
+
 # Command handler for /videochat
 async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -93,7 +102,7 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         room_name = f"random-chat-{user1[0]}-{user2[0]}"
         video_chat_link = f"https://meet.jit.si/{room_name}?jitsi_meet_external_api_id=0&config.startWithVideoMuted=true&config.startWithAudioMuted=true"
 
-        # Send the link to both users with an Arabic permission message
+        # Send the link to both users
         await context.bot.send_message(
             chat_id=user1[0],
             text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
@@ -124,6 +133,7 @@ def main():
     application.add_handler(CommandHandler("help", help_ar))
     application.add_handler(CommandHandler("howto", how_to_use))
     application.add_handler(CommandHandler("videochat", start_video_chat))
+    application.add_handler(CommandHandler("miniapp", mini_app))
 
     # Add error handler
     application.add_error_handler(error_handler)
