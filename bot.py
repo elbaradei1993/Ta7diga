@@ -59,7 +59,8 @@ async def help_ar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/privacy - عرض سياسة الخصوصية\n"
         "/help - عرض هذه الرسالة\n"
         "/videochat - بدء دردشة فيديو عشوائية\n"
-        "/howto - كيفية استخدام البوت"
+        "/howto - كيفية استخدام البوت\n"
+        "/miniapp - فتح تطبيق الميني"
     )
     await update.message.reply_text(help_message)
 
@@ -76,6 +77,38 @@ async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(howto_message)
 
+# Command handler for /videochat
+async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.from_user.id
+    user_name = update.message.from_user.first_name
+
+    # Add the user to the waiting list
+    waiting_users.append((user_id, user_name))
+
+    if len(waiting_users) >= 2:
+        # Pair two random users
+        user1, user2 = random.sample(waiting_users, 2)
+        waiting_users.remove(user1)
+        waiting_users.remove(user2)
+
+        # Generate a unique video chat link using Jitsi Meet
+        room_name = f"random-chat-{user1[0]}-{user2[0]}"
+        video_chat_link = f"https://meet.jit.si/{room_name}?jitsi_meet_external_api_id=0&config.startWithVideoMuted=true&config.startWithAudioMuted=true"
+
+        # Send the link to both users
+        await context.bot.send_message(
+            chat_id=user1[0],
+            text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
+                 "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
+        )
+        await context.bot.send_message(
+            chat_id=user2[0],
+            text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
+                 "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
+        )
+    else:
+        await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
+
 # Command handler for /miniapp
 async def mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Create a button to open the Mini App
@@ -84,52 +117,6 @@ async def mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("انقر على الزر أدناه لفتح تطبيق الميني:", reply_markup=reply_markup)
-
-# Handler for Mini App data
-async def handle_mini_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Extract data sent by the Mini App
-    if update.message and update.message.web_app_data:
-        data = update.message.web_app_data
-        print("Received data from Mini App:", data.data)  # Log the received data
-        try:
-            user_data = json.loads(data.data)
-            if user_data.get("action") == "start_video_chat":
-                user_id = update.message.from_user.id
-                user_name = update.message.from_user.first_name
-
-                # Add the user to the waiting list
-                waiting_users.append((user_id, user_name))
-                print(f"User {user_name} added to waiting list. Total users: {len(waiting_users)}")  # Log waiting list status
-
-                if len(waiting_users) >= 2:
-                    # Pair two random users
-                    user1, user2 = random.sample(waiting_users, 2)
-                    waiting_users.remove(user1)
-                    waiting_users.remove(user2)
-
-                    # Generate a unique video chat link using Jitsi Meet
-                    room_name = f"random-chat-{user1[0]}-{user2[0]}"
-                    video_chat_link = f"https://meet.jit.si/{room_name}?jitsi_meet_external_api_id=0&config.startWithVideoMuted=true&config.startWithAudioMuted=true"
-
-                    # Send the link to both users
-                    await context.bot.send_message(
-                        chat_id=user1[0],
-                        text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
-                             "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
-                    )
-                    await context.bot.send_message(
-                        chat_id=user2[0],
-                        text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
-                             "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
-                    )
-                    print(f"Paired {user1[1]} with {user2[1]}. Sent link: {video_chat_link}")  # Log pairing
-                else:
-                    await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
-                    print(f"User {user_name} is waiting for a partner.")  # Log waiting status
-        except Exception as e:
-            print("Error processing Mini App data:", e)  # Log any errors
-    else:
-        print("No data received from Mini App.")  # Log if no data is received
 
 # Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -147,10 +134,8 @@ def main():
     application.add_handler(CommandHandler("privacy", privacy_policy))
     application.add_handler(CommandHandler("help", help_ar))
     application.add_handler(CommandHandler("howto", how_to_use))
+    application.add_handler(CommandHandler("videochat", start_video_chat))
     application.add_handler(CommandHandler("miniapp", mini_app))
-
-    # Add handler for Mini App data
-    application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_mini_app_data))
 
     # Add error handler
     application.add_error_handler(error_handler)
