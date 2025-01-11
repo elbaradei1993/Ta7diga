@@ -1,13 +1,6 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import random
-import logging
-
-# Enable logging
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-logger = logging.getLogger(__name__)
 
 # Store users waiting for a match
 waiting_users = []
@@ -36,10 +29,7 @@ async def help_ar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/start - بدء التشغيل\n"
         "/privacy - عرض سياسة الخصوصية\n"
         "/help - عرض هذه الرسالة\n"
-        "/videochat - بدء دردشة فيديو عشوائية\n"
-        "/skip - تخطي المستخدم الحالي\n"
-        "/report - الإبلاغ عن سلوك غير لائق\n"
-        "/chat - بدء دردشة نصية"
+        "/videochat - بدء دردشة فيديو عشوائية"
     )
     await update.message.reply_text(help_message)
 
@@ -59,46 +49,21 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Generate a unique video chat link using Jitsi Meet
         room_name = f"random-chat-{user1[0]}-{user2[0]}"
-        video_chat_link = f"https://meet.jit.si/{room_name}"
+        video_chat_link = f"https://meet.jit.si/{room_name}?jitsi_meet_external_api_id=0&config.startWithVideoMuted=true&config.startWithAudioMuted=true"
 
-        # Send the link to both users
+        # Send the link to both users with an Arabic permission message
         await context.bot.send_message(
             chat_id=user1[0],
-            text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}"
+            text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
+                 "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
         )
         await context.bot.send_message(
             chat_id=user2[0],
-            text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}"
+            text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
+                 "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
         )
     else:
         await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
-
-# Command handler for /skip
-async def skip(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if (user_id, _) in waiting_users:
-        waiting_users.remove((user_id, _))
-        await update.message.reply_text("تم تخطي المستخدم. البحث عن مستخدم جديد...")
-    else:
-        await update.message.reply_text("لا يوجد مستخدم لتخطيه.")
-
-# Command handler for /report
-async def report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("تم إرسال تقريرك. سنقوم بمراجعته قريبًا.")
-
-# Command handler for /chat
-async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    if len(waiting_users) >= 2:
-        user1, user2 = random.sample(waiting_users, 2)
-        await context.bot.send_message(chat_id=user1[0], text=f"💬 يمكنك الدردشة مع {user2[1]}.")
-        await context.bot.send_message(chat_id=user2[0], text=f"💬 يمكنك الدردشة مع {user1[1]}.")
-    else:
-        await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
-
-# Error handler
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Error: {context.error}")
 
 def main():
     # Replace with your bot's API token
@@ -112,12 +77,6 @@ def main():
     application.add_handler(CommandHandler("privacy", privacy_policy))
     application.add_handler(CommandHandler("help", help_ar))
     application.add_handler(CommandHandler("videochat", start_video_chat))
-    application.add_handler(CommandHandler("skip", skip))
-    application.add_handler(CommandHandler("report", report))
-    application.add_handler(CommandHandler("chat", chat))
-
-    # Add error handler
-    application.add_error_handler(error_handler)
 
     # Start the bot
     print("Bot is running...")
