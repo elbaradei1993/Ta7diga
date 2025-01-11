@@ -88,39 +88,48 @@ async def mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Handler for Mini App data
 async def handle_mini_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Extract data sent by the Mini App
-    data = update.message.web_app_data
-    if data:
-        user_data = json.loads(data.data)
-        if user_data.get("action") == "start_video_chat":
-            user_id = update.message.from_user.id
-            user_name = update.message.from_user.first_name
+    if update.message and update.message.web_app_data:
+        data = update.message.web_app_data
+        print("Received data from Mini App:", data.data)  # Log the received data
+        try:
+            user_data = json.loads(data.data)
+            if user_data.get("action") == "start_video_chat":
+                user_id = update.message.from_user.id
+                user_name = update.message.from_user.first_name
 
-            # Add the user to the waiting list
-            waiting_users.append((user_id, user_name))
+                # Add the user to the waiting list
+                waiting_users.append((user_id, user_name))
+                print(f"User {user_name} added to waiting list. Total users: {len(waiting_users)}")  # Log waiting list status
 
-            if len(waiting_users) >= 2:
-                # Pair two random users
-                user1, user2 = random.sample(waiting_users, 2)
-                waiting_users.remove(user1)
-                waiting_users.remove(user2)
+                if len(waiting_users) >= 2:
+                    # Pair two random users
+                    user1, user2 = random.sample(waiting_users, 2)
+                    waiting_users.remove(user1)
+                    waiting_users.remove(user2)
 
-                # Generate a unique video chat link using Jitsi Meet
-                room_name = f"random-chat-{user1[0]}-{user2[0]}"
-                video_chat_link = f"https://meet.jit.si/{room_name}?jitsi_meet_external_api_id=0&config.startWithVideoMuted=true&config.startWithAudioMuted=true"
+                    # Generate a unique video chat link using Jitsi Meet
+                    room_name = f"random-chat-{user1[0]}-{user2[0]}"
+                    video_chat_link = f"https://meet.jit.si/{room_name}?jitsi_meet_external_api_id=0&config.startWithVideoMuted=true&config.startWithAudioMuted=true"
 
-                # Send the link to both users
-                await context.bot.send_message(
-                    chat_id=user1[0],
-                    text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
-                         "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
-                )
-                await context.bot.send_message(
-                    chat_id=user2[0],
-                    text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
-                         "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
-                )
-            else:
-                await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
+                    # Send the link to both users
+                    await context.bot.send_message(
+                        chat_id=user1[0],
+                        text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
+                             "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
+                    )
+                    await context.bot.send_message(
+                        chat_id=user2[0],
+                        text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
+                             "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
+                    )
+                    print(f"Paired {user1[1]} with {user2[1]}. Sent link: {video_chat_link}")  # Log pairing
+                else:
+                    await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
+                    print(f"User {user_name} is waiting for a partner.")  # Log waiting status
+        except Exception as e:
+            print("Error processing Mini App data:", e)  # Log any errors
+    else:
+        print("No data received from Mini App.")  # Log if no data is received
 
 # Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
