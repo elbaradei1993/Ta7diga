@@ -1,8 +1,7 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 import random
 import logging
-import json
 
 # Enable logging
 logging.basicConfig(
@@ -59,8 +58,7 @@ async def help_ar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/privacy - عرض سياسة الخصوصية\n"
         "/help - عرض هذه الرسالة\n"
         "/videochat - بدء دردشة فيديو عشوائية\n"
-        "/howto - كيفية استخدام البوت\n"
-        "/miniapp - فتح تطبيق الميني"
+        "/howto - كيفية استخدام البوت"
     )
     await update.message.reply_text(help_message)
 
@@ -109,15 +107,6 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
 
-# Command handler for /miniapp
-async def mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Create a button to open the Mini App
-    keyboard = [
-        [InlineKeyboardButton("فتح تطبيق الميني", web_app={"url": "https://ta7diga-mini-app.vercel.app/"})]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("انقر على الزر أدناه لفتح تطبيق الميني:", reply_markup=reply_markup)
-
 # Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
@@ -135,7 +124,6 @@ def main():
     application.add_handler(CommandHandler("help", help_ar))
     application.add_handler(CommandHandler("howto", how_to_use))
     application.add_handler(CommandHandler("videochat", start_video_chat))
-    application.add_handler(CommandHandler("miniapp", mini_app))
 
     # Add error handler
     application.add_error_handler(error_handler)
