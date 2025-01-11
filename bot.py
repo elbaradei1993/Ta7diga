@@ -26,6 +26,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔒 **خصوصيتك مهمة**:\n"
         "- نحن لا نخزن أي معلومات شخصية.\n"
         "- جميع التفاعلات مع البوت آمنة ومشفرة.\n\n"
+        "📝 **تعليمات الاستخدام**:\n"
+        "- البوت سيفتح المتصفح.\n"
+        "- اختر مكان استخدامه (جوال أو كمبيوتر).\n"
+        "- لا حاجة لتنزيل 'Jitsi'.\n"
+        "- وافق على استخدام الكاميرا والميكروفون لبدء المحادثة.\n"
+        "- لا تستخدم رابط المحادثة القديم.\n"
+        "- اضغط /videochat في كل مرة تريد بدء محادثة جديدة.\n\n"
         "إذا كانت لديك أي أسئلة، فلا تتردد في التواصل معنا. 😊"
     )
     await update.message.reply_text(start_message)
@@ -50,9 +57,23 @@ async def help_ar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/start - بدء التشغيل\n"
         "/privacy - عرض سياسة الخصوصية\n"
         "/help - عرض هذه الرسالة\n"
-        "/videochat - بدء دردشة فيديو عشوائية"
+        "/videochat - بدء دردشة فيديو عشوائية\n"
+        "/howto - كيفية استخدام البوت"
     )
     await update.message.reply_text(help_message)
+
+# Command handler for /howto
+async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    howto_message = (
+        "🛠 **كيفية استخدام البوت**:\n\n"
+        "1. البوت سيفتح المتصفح.\n"
+        "2. اختر مكان استخدامه (جوال أو كمبيوتر).\n"
+        "3. لا حاجة لتنزيل 'Jitsi'.\n"
+        "4. وافق على استخدام الكاميرا والميكروفون لبدء المحادثة.\n"
+        "5. لا تستخدم رابط المحادثة القديم.\n"
+        "6. اضغط /videochat في كل مرة تريد بدء محادثة جديدة."
+    )
+    await update.message.reply_text(howto_message)
 
 # Command handler for /videochat
 async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -101,6 +122,7 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("privacy", privacy_policy))
     application.add_handler(CommandHandler("help", help_ar))
+    application.add_handler(CommandHandler("howto", how_to_use))
     application.add_handler(CommandHandler("videochat", start_video_chat))
 
     # Add error handler
