@@ -7,7 +7,7 @@ waiting_users = []
 
 # Command handler for /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("مرحبًا! البوت يعمل الآن. 🎉")
+    await update.message.reply_text("مرحبًا!بك في تحديقة. 🎉")
 
 # Command handler for /privacy
 async def privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
