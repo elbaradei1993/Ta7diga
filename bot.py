@@ -1,13 +1,34 @@
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import random
+import logging
+
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 # Store users waiting for a match
 waiting_users = []
 
 # Command handler for /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("مرحبًا بك في تحديقة دردشة الفيديو العشوائية)
+    start_message = (
+        "مرحبًا! أنا بوت دردشة الفيديو العشوائية. 🎥\n\n"
+        "✨ **ماذا أقدم؟**\n"
+        "- يمكنك بدء دردشة فيديو عشوائية مع مستخدمين آخرين.\n"
+        "- الدردشة آمنة ومجهولة تمامًا.\n\n"
+        "🛠 **كيفية الاستخدام**:\n"
+        "1. أرسل /start لبدء التشغيل.\n"
+        "2. أرسل /videochat للبدء في البحث عن شريك دردشة.\n"
+        "3. استمتع بمحادثة فيديو مع شخص جديد!\n\n"
+        "🔒 **خصوصيتك مهمة**:\n"
+        "- نحن لا نخزن أي معلومات شخصية.\n"
+        "- جميع التفاعلات مع البوت آمنة ومشفرة.\n\n"
+        "إذا كانت لديك أي أسئلة، فلا تتردد في التواصل معنا. 😊"
+    )
+    await update.message.reply_text(start_message)
 
 # Command handler for /privacy
 async def privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -65,6 +86,10 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
 
+# Error handler
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Error: {context.error}")
+
 def main():
     # Replace with your bot's API token
     TOKEN = "7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU"
@@ -77,6 +102,9 @@ def main():
     application.add_handler(CommandHandler("privacy", privacy_policy))
     application.add_handler(CommandHandler("help", help_ar))
     application.add_handler(CommandHandler("videochat", start_video_chat))
+
+    # Add error handler
+    application.add_error_handler(error_handler)
 
     # Start the bot
     print("Bot is running...")
