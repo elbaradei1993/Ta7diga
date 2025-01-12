@@ -5,11 +5,7 @@ from telegram.error import BadRequest
 import logging
 import uuid
 import os
-from dotenv import load_dotenv  # Add this line
 from flask_cors import CORS
-
-# Load environment variables from .env file
-load_dotenv()  # Add this line
 
 # Enable logging
 logging.basicConfig(
@@ -24,17 +20,22 @@ CORS(app)  # Enable CORS for all routes
 # Store users waiting for a match
 waiting_users = []
 
-# Initialize Telegram bot
-TELEGRAM_TOKEN = os.environ.get("7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU")  # Read token from environment variable
-FRONTEND_URL = os.environ.get("https://elbaradei1993.github.io/ta7diga-bot-frontend/")  # Read frontend URL from environment variable
-RAILWAY_URL = os.environ.get("https://worker-production-01b7.up.railway.app")  # Read Railway URL from environment variable
+# Hardcoded values for testing
+TELEGRAM_TOKEN = "7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU"
+FRONTEND_URL = "https://elbaradei1993.github.io/ta7diga-bot-frontend/"
+RAILWAY_URL = "https://worker-production-01b7.up.railway.app"
+
+# Debugging: Print the values of the hardcoded variables
+print(f"TELEGRAM_TOKEN: {TELEGRAM_TOKEN}")
+print(f"FRONTEND_URL: {FRONTEND_URL}")
+print(f"RAILWAY_URL: {RAILWAY_URL}")
 
 if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_TOKEN environment variable is missing!")
+    raise ValueError("TELEGRAM_TOKEN is missing!")
 if not FRONTEND_URL:
-    raise ValueError("FRONTEND_URL environment variable is missing!")
+    raise ValueError("FRONTEND_URL is missing!")
 if not RAILWAY_URL:
-    raise ValueError("RAILWAY_URL environment variable is missing!")
+    raise ValueError("RAILWAY_URL is missing!")
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
