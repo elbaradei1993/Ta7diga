@@ -2,4 +2,4 @@ Flask
 python-telegram-bot>=20.0
 flask_cors
 python-dotenv==1.0.
-gunicorn==21.2.0
+gunicorn==23.0.0
