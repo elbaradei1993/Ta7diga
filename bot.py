@@ -59,7 +59,11 @@ application.add_handler(CommandHandler('start', start))
 @app.route('/telegram_webhook', methods=['POST'])
 async def telegram_webhook():
     try:
-        update = Update.de_json(request.get_json(), bot)
+        # Parse the incoming update from Telegram
+        update_data = request.get_json()
+        update = Update.de_json(update_data, bot)
+        
+        # Process the update
         await application.process_update(update)
         return 'OK'
     except Exception as e:
