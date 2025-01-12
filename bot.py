@@ -1,10 +1,15 @@
 from flask import Flask, request, jsonify
 from telegram import Bot, Update
-from telegram.ext import Application, CommandHandler  # Use Application instead of Dispatcher
+from telegram.ext import Application, CommandHandler
+from telegram.error import BadRequest
 import logging
 import uuid
 import os
-import random
+from dotenv import load_dotenv
+from flask_cors import CORS
+
+# Load environment variables
+load_dotenv()
 
 # Enable logging
 logging.basicConfig(
@@ -14,34 +19,40 @@ logger = logging.getLogger(__name__)
 
 # Initialize Flask app
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 
 # Store users waiting for a match
 waiting_users = []
 
 # Initialize Telegram bot
-TELEGRAM_TOKEN = os.environ.get("7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU")  # Get token from environment variable
+TELEGRAM_TOKEN = os.environ.get("7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "worker-production-01b7.up.railway.app")
+
+if not TELEGRAM_TOKEN:
+    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is missing!")
+
 bot = Bot(token=TELEGRAM_TOKEN)
 
 # Token mapping
 tokens = {}
 
 # Command handler for /start
-async def start(update: Update, context):  # Use async for v20+
+async def start(update: Update, context):
     user_id = update.effective_user.id
     token = str(uuid.uuid4())
     tokens[token] = user_id
-    link = f"https://your-github-pages-url.com?token={token}"  # Replace with your frontend URL
+    link = f"{FRONTEND_URL}?token={token}"
     await update.message.reply_text(f"Please click the link to continue: {link}")
 
 # Set up the Application
-application = Application.builder().token(TELEGRAM_TOKEN).build()  # Use Application instead of Dispatcher
+application = Application.builder().token(TELEGRAM_TOKEN).build()
 application.add_handler(CommandHandler('start', start))
 
 # Flask route for Telegram webhook
 @app.route('/telegram_webhook', methods=['POST'])
-async def telegram_webhook():  # Use async for v20+
+async def telegram_webhook():
     update = Update.de_json(request.get_json(), bot)
-    await application.process_update(update)  # Use application.process_update
+    await application.process_update(update)
     return 'OK'
 
 # Flask route for starting video chat
@@ -49,12 +60,16 @@ async def telegram_webhook():  # Use async for v20+
 def start_video_chat():
     data = request.get_json()
     token = data.get('token')
-    user_id = tokens.get(token)
-    if not user_id:
+    if not token or token not in tokens:
         return jsonify({'message': 'Invalid token.'}), 400
 
-    user = bot.get_chat(user_id)
-    user_name = user.first_name
+    user_id = tokens[token]
+    try:
+        user = bot.get_chat(user_id)
+        user_name = user.first_name
+    except BadRequest as e:
+        return jsonify({'message': f'Failed to fetch user details: {str(e)}'}), 400
+
     waiting_users.append({'user_id': user_id, 'user_name': user_name})
 
     if len(waiting_users) >= 2:
@@ -74,3 +89,5 @@ def start_video_chat():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+    # Set webhook after the app starts
+    bot.set_webhook(url="https://your-railway-app-url.com/telegram_webhook")
