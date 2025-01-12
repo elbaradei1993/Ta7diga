@@ -1,5 +1,5 @@
-Flask
-python-telegram-bot>=20.0
-flask_cors
-python-dotenv==1.0.
+Flask==2.3.2
+python-telegram-bot==20.3
+Flask-Cors==4.0.0
+python-dotenv==1.0.0
 gunicorn==23.0.0
