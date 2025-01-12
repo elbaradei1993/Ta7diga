@@ -24,7 +24,7 @@ waiting_users = []
 # Hardcoded values for testing
 TELEGRAM_TOKEN = "7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU"
 FRONTEND_URL = "https://elbaradei1993.github.io/ta7diga-bot-frontend/"
-RAILWAY_URL = "https://worker-production-01b7.up.railway.app/telegram_webhook"
+RAILWAY_URL = "https://worker-production-01b7.up.railway.app"
 
 # Debugging: Print the values of the hardcoded variables
 print(f"TELEGRAM_TOKEN: {TELEGRAM_TOKEN}")
