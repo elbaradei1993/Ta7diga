@@ -25,11 +25,11 @@ CORS(app)  # Enable CORS for all routes
 waiting_users = []
 
 # Initialize Telegram bot
-TELEGRAM_TOKEN = os.environ.get("7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU")
+TELEGRAM_TOKEN = os.environ.get("7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU")  # Read token from environment variable
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "worker-production-01b7.up.railway.app")
 
 if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is missing!")
+    raise ValueError("worker-production-01b7.up.railway.app environment variable is missing!")
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
