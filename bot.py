@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler
-from telegram.error import BadRequest
+from telegram.error import BadRequest, RetryAfter
 import logging
 import uuid
 import os
@@ -100,9 +100,21 @@ def start_video_chat():
         logger.error(f"Error in start_video_chat: {str(e)}")
         return jsonify({'message': 'Internal server error.'}), 500
 
-# Function to set the webhook asynchronously
+# Function to set the webhook asynchronously with retry mechanism
 async def set_webhook_async():
-    await bot.set_webhook(url=f"{RAILWAY_URL}/telegram_webhook")
+    retries = 3  # Number of retries
+    for attempt in range(retries):
+        try:
+            await bot.set_webhook(url=f"{RAILWAY_URL}/telegram_webhook")
+            print("Webhook set successfully!")
+            break
+        except RetryAfter as e:
+            print(f"Rate limit exceeded. Retrying in {e.retry_after} seconds...")
+            await asyncio.sleep(e.retry_after)
+        except Exception as e:
+            print(f"Failed to set webhook: {str(e)}")
+            if attempt == retries - 1:
+                raise  # Raise the exception if all retries fail
 
 # Run the Flask app
 if __name__ == "__main__":
