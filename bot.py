@@ -5,7 +5,7 @@ from telegram.error import BadRequest
 import logging
 import uuid
 import os
-import asyncio  # Add this line
+import asyncio
 from flask_cors import CORS
 
 # Enable logging
