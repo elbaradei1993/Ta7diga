@@ -30,7 +30,7 @@ FRONTEND_URL = os.environ.get("https://elbaradei1993.github.io/ta7diga-bot-front
 RAILWAY_URL = os.environ.get("https://worker-production-01b7.up.railway.app")  # Read Railway URL from environment variable
 
 if not TELEGRAM_TOKEN:
-    raise ValueError("TELEGRAM_BOT_TOKEN environment variable is missing!")
+    raise ValueError("TELEGRAM_TOKEN environment variable is missing!")
 if not FRONTEND_URL:
     raise ValueError("FRONTEND_URL environment variable is missing!")
 if not RAILWAY_URL:
