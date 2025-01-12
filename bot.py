@@ -61,6 +61,7 @@ async def telegram_webhook():
     try:
         # Parse the incoming update from Telegram
         update_data = request.get_json()
+        print("Received update:", update_data)  # Debugging
         update = Update.de_json(update_data, bot)
         
         # Process the update
