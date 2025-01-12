@@ -26,8 +26,8 @@ waiting_users = []
 
 # Initialize Telegram bot
 TELEGRAM_TOKEN = os.environ.get("7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU")  # Read token from environment variable
-FRONTEND_URL = os.environ.get("worker-production-01b7.up.railway.app")  # Read frontend URL from environment variable
-RAILWAY_URL = os.environ.get("worker-production-01b7.up.railway.app")  # Read Railway URL from environment variable
+FRONTEND_URL = os.environ.get("https://elbaradei1993.github.io/ta7diga-bot-frontend/")  # Read frontend URL from environment variable
+RAILWAY_URL = os.environ.get("https://worker-production-01b7.up.railway.app")  # Read Railway URL from environment variable
 
 if not TELEGRAM_TOKEN:
     raise ValueError("TELEGRAM_BOT_TOKEN environment variable is missing!")
