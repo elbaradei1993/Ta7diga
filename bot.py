@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from telegram import Bot, Update
-from telegram.ext import Dispatcher, CommandHandler
+from telegram.ext import Application, CommandHandler  # Use Application instead of Dispatcher
 import logging
 import uuid
 import os
@@ -26,22 +26,22 @@ bot = Bot(token=TELEGRAM_TOKEN)
 tokens = {}
 
 # Command handler for /start
-def start(update, context):
+async def start(update: Update, context):  # Use async for v20+
     user_id = update.effective_user.id
     token = str(uuid.uuid4())
     tokens[token] = user_id
     link = f"https://your-github-pages-url.com?token={token}"  # Replace with your frontend URL
-    update.message.reply_text(f"Please click the link to continue: {link}")
+    await update.message.reply_text(f"Please click the link to continue: {link}")
 
-# Set up the dispatcher
-dispatcher = Dispatcher(bot, None, workers=0)
-dispatcher.add_handler(CommandHandler('start', start))
+# Set up the Application
+application = Application.builder().token(TELEGRAM_TOKEN).build()  # Use Application instead of Dispatcher
+application.add_handler(CommandHandler('start', start))
 
 # Flask route for Telegram webhook
 @app.route('/telegram_webhook', methods=['POST'])
-def telegram_webhook():
+async def telegram_webhook():  # Use async for v20+
     update = Update.de_json(request.get_json(), bot)
-    dispatcher.process_update(update)
+    await application.process_update(update)  # Use application.process_update
     return 'OK'
 
 # Flask route for starting video chat
