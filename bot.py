@@ -19,7 +19,7 @@ app = Flask(__name__)
 waiting_users = []
 
 # Initialize Telegram bot
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")  # Get token from environment variable
+TELEGRAM_TOKEN = os.environ.get("7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU")  # Get token from environment variable
 bot = Bot(token=TELEGRAM_TOKEN)
 
 # Token mapping
