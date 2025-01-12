@@ -134,3 +134,72 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+from flask import Flask, request, jsonify
+from telegram import Bot, Update
+from telegram.ext import Dispatcher, CommandHandler, MessageHandler, Filters
+import logging
+import uuid
+
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+app = Flask(__name__)
+
+# Store users waiting for a match
+waiting_users = []
+
+# Create a Telegram Bot instance
+bot = Bot(token='YOUR_TELEGRAM_BOT_TOKEN')
+
+# Token mapping
+tokens = {}
+
+# Command handler for /start
+def start(update, context):
+    user_id = update.effective_user.id
+    token = str(uuid.uuid4())
+    tokens[token] = user_id
+    link = f"https://your-github-pages-url.com?token={token}"
+    update.message.reply_text(f"Please click the link to continue: {link}")
+
+# Set up the dispatcher
+dispatcher = Dispatcher(bot, None, workers=0)
+dispatcher.add_handler(CommandHandler('start', start))
+
+@app.route('/telegram_webhook', methods=['POST'])
+def telegram_webhook():
+    update = Update.de_json(request.get_json(), bot)
+    dispatcher.process_update(update)
+    return 'OK'
+
+@app.route('/start_video_chat', methods=['POST'])
+def start_video_chat():
+    data = request.get_json()
+    token = data.get('token')
+    user_id = tokens.get(token)
+    if not user_id:
+        return jsonify({'message': 'Invalid token.'}), 400
+    user = bot.get_chat(user_id)
+    user_name = user.first_name
+    waiting_users.append({'user_id': user_id, 'user_name': user_name})
+    
+    if len(waiting_users) >= 2:
+        user1 = waiting_users.pop(0)
+        user2 = waiting_users.pop(0)
+        room_name = f"random-chat-{user1['user_id']}-{user2['user_id']}"
+        video_chat_link = f"https://meet.jit.si/{room_name}"
+        
+        bot.send_message(chat_id=user1['user_id'], text=f"🎥 لقد تم إقرانك مع {user2['user_name']}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}")
+        bot.send_message(chat_id=user2['user_id'], text=f"🎥 لقد تم إقرانك مع {user1['user_name']}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}")
+        
+        return jsonify({'message': 'Paired with another user!'})
+    else:
+        return jsonify({'message': 'Waiting for another user...'})
+
+if __name__ == "__main__":
+    bot.set_webhook(url='https://your-railway-app-url.com/telegram_webhook')
+    app.run()
