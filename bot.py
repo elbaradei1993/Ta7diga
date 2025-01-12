@@ -5,6 +5,7 @@ from telegram.error import BadRequest
 import logging
 import uuid
 import os
+import asyncio  # Add this line
 from flask_cors import CORS
 
 # Enable logging
@@ -99,9 +100,13 @@ def start_video_chat():
         logger.error(f"Error in start_video_chat: {str(e)}")
         return jsonify({'message': 'Internal server error.'}), 500
 
+# Function to set the webhook asynchronously
+async def set_webhook_async():
+    await bot.set_webhook(url=f"{RAILWAY_URL}/telegram_webhook")
+
 # Run the Flask app
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    # Set webhook after the app starts
-    bot.set_webhook(url=f"{RAILWAY_URL}/telegram_webhook")  # Use RAILWAY_URL
+    # Set webhook asynchronously
+    asyncio.run(set_webhook_async())  # Use asyncio to await the coroutine
     app.run(host="0.0.0.0", port=port)
