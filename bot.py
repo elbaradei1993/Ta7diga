@@ -114,7 +114,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     # Retrieve the token from environment variables
-    TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+    TOKEN = os.getenv('7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU
+')
 
     # Create the Application
     application = Application.builder().token(TOKEN).build()
