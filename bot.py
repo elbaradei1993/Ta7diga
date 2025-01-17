@@ -111,11 +111,13 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
+# Function to delete the webhook
 async def delete_webhook(application: Application):
     await application.bot.delete_webhook()
 
-def main():
-    # Replace with your bot's new API token
+# Main asynchronous function to handle bot execution
+async def main():
+    # Replace with your bot's API token
     TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"
 
     # Create the Application
@@ -139,7 +141,9 @@ def main():
 
     # Start the bot
     print("Bot is running...")
-    application.run_polling()
+    await application.run_polling()
 
+# Run the bot
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
