@@ -129,6 +129,9 @@ async def main():
     except Exception as e:
         logger.warning(f"Error deleting webhook: {e}")
 
+    # Initialize the application before running polling
+    await application.initialize()
+
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("privacy", privacy_policy))
