@@ -32,52 +32,45 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer()  # Acknowledge the query to prevent timeout errors
 
     if query.data == "videochat":
         await start_video_chat(query, context)
     elif query.data == "privacy":
-        await privacy_policy(query, context)
+        await query.edit_message_text(
+            text=(
+                "🔒 **سياسة الخصوصية**\n\n"
+                "خصوصيتك مهمة لنا. إليك كيفية تعاملنا مع بياناتك:\n\n"
+                "1. نحن لا نخزن أي معلومات شخصية.\n"
+                "2. نحن لا نشارك بياناتك مع أطراف ثالثة.\n"
+                "3. جميع التفاعلات مع هذا البوت آمنة.\n\n"
+                "إذا كانت لديك أي أسئلة، فلا تتردد في الاتصال بنا."
+            )
+        )
     elif query.data == "help":
-        await help_ar(query, context)
+        await query.edit_message_text(
+            text=(
+                "🛠 **قائمة الأوامر**\n\n"
+                "ابدأ استخدام البوت مع هذه الأوامر:\n\n"
+                "/start - بدء التشغيل\n"
+                "/privacy - عرض سياسة الخصوصية\n"
+                "/help - عرض هذه الرسالة\n"
+                "/videochat - بدء دردشة فيديو عشوائية\n"
+                "/howto - كيفية استخدام التطبيق"
+            )
+        )
     elif query.data == "howto":
-        await how_to_use(query, context)
-
-# Command Handlers
-async def privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    privacy_message = (
-        "🔒 **سياسة الخصوصية**\n\n"
-        "خصوصيتك مهمة لنا. إليك كيفية تعاملنا مع بياناتك:\n\n"
-        "1. نحن لا نخزن أي معلومات شخصية.\n"
-        "2. نحن لا نشارك بياناتك مع أطراف ثالثة.\n"
-        "3. جميع التفاعلات مع هذا البوت آمنة.\n\n"
-        "إذا كانت لديك أي أسئلة، فلا تتردد في الاتصال بنا."
-    )
-    await update.callback_query.edit_message_text(privacy_message)
-
-async def help_ar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_message = (
-        "🛠 **قائمة الأوامر**\n\n"
-        "ابدأ استخدام البوت مع هذه الأوامر:\n\n"
-        "/start - بدء التشغيل\n"
-        "/privacy - عرض سياسة الخصوصية\n"
-        "/help - عرض هذه الرسالة\n"
-        "/videochat - بدء دردشة فيديو عشوائية\n"
-        "/howto - كيفية استخدام البوت"
-    )
-    await update.callback_query.edit_message_text(help_message)
-
-async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    howto_message = (
-        "🛠 **كيفية استخدام البوت**:\n\n"
-        "1. البوت سيفتح المتصفح.\n"
-        "2. اختر مكان استخدامه (جوال أو كمبيوتر).\n"
-        "3. لا حاجة لتنزيل 'Jitsi'.\n"
-        "4. وافق على استخدام الكاميرا والميكروفون لبدء المحادثة.\n"
-        "5. لا تستخدم رابط المحادثة القديم.\n"
-        "6. اضغط /videochat في كل مرة تريد بدء محادثة جديدة."
-    )
-    await update.callback_query.edit_message_text(howto_message)
+        await query.edit_message_text(
+            text=(
+                "🛠 **كيفية استخدام البوت**:\n\n"
+                "1. البوت سيفتح المتصفح.\n"
+                "2. اختر مكان استخدامه (جوال أو كمبيوتر).\n"
+                "3. لا حاجة لتنزيل 'Jitsi'.\n"
+                "4. وافق على استخدام الكاميرا والميكروفون لبدء المحادثة.\n"
+                "5. لا تستخدم رابط المحادثة القديم.\n"
+                "6. اضغط /videochat في كل مرة تريد بدء محادثة جديدة."
+            )
+        )
 
 async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -107,6 +100,7 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
                  "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
         )
+        await update.callback_query.edit_message_text("تم إقرانك بنجاح! تحقق من رسائلك الخاصة.")
     else:
         await update.callback_query.edit_message_text("⏳ في انتظار مستخدم آخر للانضمام...")
 
