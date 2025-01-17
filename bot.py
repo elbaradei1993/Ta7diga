@@ -1,6 +1,5 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
-import random
 import logging
 
 # Enable logging
@@ -9,123 +8,85 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Store users waiting for a match
-waiting_users = []
-
-# Command handler for /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Function to generate the main menu
+async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [
-            InlineKeyboardButton("ابدأ دردشة الفيديو", callback_data="videochat"),
-            InlineKeyboardButton("سياسة الخصوصية", callback_data="privacy"),
-        ],
-        [
-            InlineKeyboardButton("المساعدة", callback_data="help"),
-            InlineKeyboardButton("كيفية الاستخدام", callback_data="howto"),
-        ],
+        [InlineKeyboardButton("المساعدة", callback_data="help")],
+        [InlineKeyboardButton("كيفية الاستخدام", callback_data="how_to_use")],
+        [InlineKeyboardButton("سياسة الخصوصية", callback_data="privacy_policy")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("\u2728 القائمة الرئيسية:", reply_markup=reply_markup)
+
+# Function to handle the help menu
+async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    keyboard = [
+        [InlineKeyboardButton("الرجوع", callback_data="main_menu")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await update.message.reply_text(
-        "مرحبًا! اختر خيارًا من القائمة أدناه:", reply_markup=reply_markup
+    await query.edit_message_text(
+        "\u2753 قائمة المساعدة:\n\n- استخدم القائمة للتنقل.\n",
+        reply_markup=reply_markup,
     )
 
-# Callback query handler
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Function to handle the how-to-use menu
+async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()  # Acknowledge the query to prevent timeout errors
+    await query.answer()
 
-    # Handle button presses based on callback data
-    if query.data == "videochat":
-        await start_video_chat(update, context)
-    elif query.data == "privacy":
-        await query.edit_message_text(
-            text=(
-                "🔒 **سياسة الخصوصية**\n\n"
-                "خصوصيتك مهمة لنا. إليك كيفية تعاملنا مع بياناتك:\n\n"
-                "1. نحن لا نخزن أي معلومات شخصية.\n"
-                "2. نحن لا نشارك بياناتك مع أطراف ثالثة.\n"
-                "3. جميع التفاعلات مع هذا البوت آمنة.\n\n"
-                "إذا كانت لديك أي أسئلة، فلا تتردد في الاتصال بنا."
-            )
-        )
-    elif query.data == "help":
-        await query.edit_message_text(
-            text=(
-                "🛠 **قائمة الأوامر**\n\n"
-                "ابدأ استخدام البوت مع هذه الأوامر:\n\n"
-                "/start - بدء التشغيل\n"
-                "/privacy - عرض سياسة الخصوصية\n"
-                "/help - عرض هذه الرسالة\n"
-                "/videochat - بدء دردشة فيديو عشوائية\n"
-                "/howto - كيفية استخدام البوت"
-            )
-        )
-    elif query.data == "howto":
-        await query.edit_message_text(
-            text=(
-                "🛠 **كيفية استخدام البوت**:\n\n"
-                "1. البوت سيفتح المتصفح.\n"
-                "2. اختر مكان استخدامه (جوال أو كمبيوتر).\n"
-                "3. لا حاجة لتنزيل 'Jitsi'.\n"
-                "4. وافق على استخدام الكاميرا والميكروفون لبدء المحادثة.\n"
-                "5. لا تستخدم رابط المحادثة القديم.\n"
-                "6. اضغط /videochat في كل مرة تريد بدء محادثة جديدة."
-            )
-        )
+    keyboard = [
+        [InlineKeyboardButton("الرجوع", callback_data="main_menu")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-# Command handler for video chat
-async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user_name = update.effective_user.first_name
+    await query.edit_message_text(
+        "\ud83d\udd27 كيفية الاستخدام:\n\n1. استخدم الأزرار في القائمة.\n2. تنقل بسهولة عبر البوت.\n",
+        reply_markup=reply_markup,
+    )
 
-    # Add the user to the waiting list
-    waiting_users.append((user_id, user_name))
+# Function to handle the privacy policy menu
+async def privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-    if len(waiting_users) >= 2:
-        # Pair two random users
-        user1, user2 = random.sample(waiting_users, 2)
-        waiting_users.remove(user1)
-        waiting_users.remove(user2)
+    keyboard = [
+        [InlineKeyboardButton("الرجوع", callback_data="main_menu")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Generate a unique video chat link using Jitsi Meet
-        room_name = f"random-chat-{user1[0]}-{user2[0]}"
-        video_chat_link = f"https://meet.jit.si/{room_name}?jitsi_meet_external_api_id=0&config.startWithVideoMuted=true&config.startWithAudioMuted=true"
+    await query.edit_message_text(
+        "\ud83d\udd12 سياسة الخصوصية:\n\nنحن نحترم خصوصيتك ولا نخزن أي معلومات شخصية.\n",
+        reply_markup=reply_markup,
+    )
 
-        # Send the link to both users
-        await context.bot.send_message(
-            chat_id=user1[0],
-            text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
-                 "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
-        )
-        await context.bot.send_message(
-            chat_id=user2[0],
-            text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا لبدء دردشة الفيديو: {video_chat_link}\n\n"
-                 "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
-        )
-        await update.callback_query.edit_message_text("تم إقرانك بنجاح! تحقق من رسائلك الخاصة.")
-    else:
-        await update.callback_query.edit_message_text("⏳ في انتظار مستخدم آخر للانضمام...")
+# Function to handle the go-back action
+async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    await main_menu(query, context)
 
-# Error handler
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Error: {context.error}")
-
-# Main function
+# Main function to set up the bot
 def main():
     # Replace with your bot's API token
-    TOKEN = "7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU"
+    TOKEN = "YOUR_BOT_TOKEN"  # Replace with your actual bot token
 
-    # Create the Application
     application = Application.builder().token(TOKEN).build()
 
-    # Add handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CallbackQueryHandler(button_callback))
-    application.add_error_handler(error_handler)
+    # Command handler for the /start command
+    application.add_handler(CommandHandler("start", main_menu))
+
+    # Callback query handlers for menu buttons
+    application.add_handler(CallbackQueryHandler(help_menu, pattern="^help$"))
+    application.add_handler(CallbackQueryHandler(how_to_use, pattern="^how_to_use$"))
+    application.add_handler(CallbackQueryHandler(privacy_policy, pattern="^privacy_policy$"))
+    application.add_handler(CallbackQueryHandler(go_back, pattern="^main_menu$"))
 
     # Start the bot
-    print("Bot is running...")
+    print("البوت يعمل...")
     application.run_polling()
 
 if __name__ == "__main__":
