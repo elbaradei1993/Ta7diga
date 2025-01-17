@@ -1,5 +1,6 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from flask import Flask, request
 import logging
 
 # Enable logging
@@ -37,6 +38,9 @@ MESSAGES = {
     }
 }
 
+# Flask app
+app = Flask(__name__)
+
 # Function to generate the main menu
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -52,102 +56,54 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.callback_query:
         await update.callback_query.edit_message_text(MESSAGES["welcome"][LANGUAGE], reply_markup=reply_markup)
 
-# Function to handle the help menu
-async def help_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Function to handle callback data (menu actions)
+async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    if query.data == "help":
+        message = MESSAGES["help"][LANGUAGE]
+    elif query.data == "how_to_use":
+        message = MESSAGES["how_to_use"][LANGUAGE]
+    elif query.data == "privacy_policy":
+        message = MESSAGES["privacy_policy"][LANGUAGE]
+    elif query.data == "feedback":
+        message = MESSAGES["feedback"][LANGUAGE]
+    elif query.data == "about":
+        message = MESSAGES["about"][LANGUAGE]
+    else:
+        message = MESSAGES["welcome"][LANGUAGE]
+    
     keyboard = [
         [InlineKeyboardButton("الرجوع" if LANGUAGE == "ar" else "Back", callback_data="main_menu")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(message, reply_markup=reply_markup)
 
-    await query.edit_message_text(
-        MESSAGES["help"][LANGUAGE],
-        reply_markup=reply_markup,
-    )
+# Flask route for webhook to handle updates
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    json_str = request.get_data().decode('UTF-8')
+    update = Update.de_json(json_str, application.bot)
+    application.update_queue.put(update)  # Add the update to the queue
+    return "OK", 200
 
-# Function to handle the how-to-use menu
-async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("الرجوع" if LANGUAGE == "ar" else "Back", callback_data="main_menu")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await query.edit_message_text(
-        MESSAGES["how_to_use"][LANGUAGE],
-        reply_markup=reply_markup,
-    )
-
-# Function to handle the privacy policy menu
-async def privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("الرجوع" if LANGUAGE == "ar" else "Back", callback_data="main_menu")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await query.edit_message_text(
-        MESSAGES["privacy_policy"][LANGUAGE],
-        reply_markup=reply_markup,
-    )
-
-# Function to handle the feedback menu
-async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("الرجوع" if LANGUAGE == "ar" else "Back", callback_data="main_menu")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await query.edit_message_text(
-        MESSAGES["feedback"][LANGUAGE],
-        reply_markup=reply_markup,
-    )
-
-# Function to handle the about menu
-async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("الرجوع" if LANGUAGE == "ar" else "Back", callback_data="main_menu")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await query.edit_message_text(
-        MESSAGES["about"][LANGUAGE],
-        reply_markup=reply_markup,
-    )
-
-# Main function to set up the bot
+# Main function to set up the bot and Flask server
 def main():
-    # Replace with your new bot's API token
-    TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"
+    TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"  # Replace with your new bot token
 
     application = Application.builder().token(TOKEN).build()
 
-    # Command handler for the /start command
+    # Add handlers
     application.add_handler(CommandHandler("start", main_menu))
+    application.add_handler(CallbackQueryHandler(menu_callback))
 
-    # Callback query handlers for menu buttons
-    application.add_handler(CallbackQueryHandler(help_menu, pattern="^help$"))
-    application.add_handler(CallbackQueryHandler(how_to_use, pattern="^how_to_use$"))
-    application.add_handler(CallbackQueryHandler(privacy_policy, pattern="^privacy_policy$"))
-    application.add_handler(CallbackQueryHandler(feedback, pattern="^feedback$"))
-    application.add_handler(CallbackQueryHandler(about, pattern="^about$"))
-    application.add_handler(CallbackQueryHandler(main_menu, pattern="^main_menu$"))
+    # Set webhook URL (replace with your actual server URL)
+    application.bot.set_webhook(url='https://yourdomain.com/webhook')
 
-    # Start the bot
-    print("البوت يعمل..." if LANGUAGE == "ar" else "The bot is running...")
-    application.run_polling()
+    # Start Flask app
+    app.run(host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
     main()
