@@ -1,5 +1,5 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 import random
 import logging
 
@@ -12,32 +12,38 @@ logger = logging.getLogger(__name__)
 # Store users waiting for a match
 waiting_users = []
 
-# Command handler for /start
+# Inline Keyboard Handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    start_message = (
-        "مرحبًا! أنا تحديقة دردشة الفيديو العشوائية. 🎥\n\n"
-        "✨ **ماذا أقدم؟**\n"
-        "- يمكنك بدء دردشة فيديو عشوائية مع مستخدمين آخرين.\n"
-        "- الدردشة آمنة ومجهولة تمامًا.\n\n"
-        "🛠 **كيفية الاستخدام**:\n"
-        "1. أرسل /start لبدء التشغيل.\n"
-        "2. أرسل /videochat للبدء في البحث عن شريك دردشة.\n"
-        "3. استمتع بمحادثة فيديو مع شخص جديد!\n\n"
-        "🔒 **خصوصيتك مهمة**:\n"
-        "- نحن لا نخزن أي معلومات شخصية.\n"
-        "- جميع التفاعلات مع البوت آمنة ومشفرة.\n\n"
-        "📝 **تعليمات الاستخدام**:\n"
-        "- البوت سيفتح المتصفح.\n"
-        "- اختر مكان استخدامه (جوال أو كمبيوتر).\n"
-        "- لا حاجة لتنزيل 'Jitsi'.\n"
-        "- وافق على استخدام الكاميرا والميكروفون لبدء المحادثة.\n"
-        "- لا تستخدم رابط المحادثة القديم.\n"
-        "- اضغط /videochat في كل مرة تريد بدء محادثة جديدة.\n\n"
-        "إذا كانت لديك أي أسئلة، فلا تتردد في التواصل معنا. 😊"
-    )
-    await update.message.reply_text(start_message)
+    keyboard = [
+        [
+            InlineKeyboardButton("ابدأ دردشة الفيديو", callback_data="videochat"),
+            InlineKeyboardButton("سياسة الخصوصية", callback_data="privacy"),
+        ],
+        [
+            InlineKeyboardButton("المساعدة", callback_data="help"),
+            InlineKeyboardButton("كيفية الاستخدام", callback_data="howto"),
+        ],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
-# Command handler for /privacy
+    await update.message.reply_text(
+        "مرحبًا! اختر خيارًا من القائمة أدناه:", reply_markup=reply_markup
+    )
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "videochat":
+        await start_video_chat(query, context)
+    elif query.data == "privacy":
+        await privacy_policy(query, context)
+    elif query.data == "help":
+        await help_ar(query, context)
+    elif query.data == "howto":
+        await how_to_use(query, context)
+
+# Command Handlers
 async def privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     privacy_message = (
         "🔒 **سياسة الخصوصية**\n\n"
@@ -47,9 +53,8 @@ async def privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "3. جميع التفاعلات مع هذا البوت آمنة.\n\n"
         "إذا كانت لديك أي أسئلة، فلا تتردد في الاتصال بنا."
     )
-    await update.message.reply_text(privacy_message)
+    await update.callback_query.edit_message_text(privacy_message)
 
-# Command handler for /help
 async def help_ar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_message = (
         "🛠 **قائمة الأوامر**\n\n"
@@ -60,9 +65,8 @@ async def help_ar(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/videochat - بدء دردشة فيديو عشوائية\n"
         "/howto - كيفية استخدام البوت"
     )
-    await update.message.reply_text(help_message)
+    await update.callback_query.edit_message_text(help_message)
 
-# Command handler for /howto
 async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
     howto_message = (
         "🛠 **كيفية استخدام البوت**:\n\n"
@@ -73,12 +77,11 @@ async def how_to_use(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "5. لا تستخدم رابط المحادثة القديم.\n"
         "6. اضغط /videochat في كل مرة تريد بدء محادثة جديدة."
     )
-    await update.message.reply_text(howto_message)
+    await update.callback_query.edit_message_text(howto_message)
 
-# Command handler for /videochat
 async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    user_name = update.message.from_user.first_name
+    user_id = update.effective_user.id
+    user_name = update.effective_user.first_name
 
     # Add the user to the waiting list
     waiting_users.append((user_id, user_name))
@@ -105,27 +108,23 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  "💡 **ملاحظة**: إذا لم تعمل الكاميرا أو الميكروفون، تأكد من منح الإذن في إعدادات المتصفح."
         )
     else:
-        await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
+        await update.callback_query.edit_message_text("⏳ في انتظار مستخدم آخر للانضمام...")
 
-# Error handler
+# Error Handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
+# Main Function
 def main():
-    # Replace with your bot's API token
+    # Use the provided bot token
     TOKEN = "7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU"
 
     # Create the Application
     application = Application.builder().token(TOKEN).build()
 
-    # Add command handlers
+    # Add handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("privacy", privacy_policy))
-    application.add_handler(CommandHandler("help", help_ar))
-    application.add_handler(CommandHandler("howto", how_to_use))
-    application.add_handler(CommandHandler("videochat", start_video_chat))
-
-    # Add error handler
+    application.add_handler(CallbackQueryHandler(button_callback))
     application.add_error_handler(error_handler)
 
     # Start the bot
