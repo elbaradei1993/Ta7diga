@@ -34,14 +34,6 @@ MESSAGES = {
     "about": {
         "ar": "\ud83d\udcd6 عن البوت:\n\nهذا البوت تم تصميمه ليكون الأفضل في فئته!",
         "en": "\ud83d\udcd6 About the bot:\n\nThis bot is designed to be the best in its class!",
-    },
-    "settings": {
-        "ar": "⚙️ إعدادات البوت:\n\n- يمكنك تخصيص إعدادات البوت هنا.",
-        "en": "⚙️ Bot Settings:\n\n- You can customize bot settings here.",
-    },
-    "contact_us": {
-        "ar": "📞 اتصل بنا:\n\n- يمكنك إرسال استفساراتك أو تعليقاتك هنا.",
-        "en": "📞 Contact Us:\n\n- You can send your inquiries or feedback here.",
     }
 }
 
@@ -52,9 +44,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("كيفية الاستخدام" if LANGUAGE == "ar" else "How to Use", callback_data="how_to_use")],
         [InlineKeyboardButton("سياسة الخصوصية" if LANGUAGE == "ar" else "Privacy Policy", callback_data="privacy_policy")],
         [InlineKeyboardButton("\ud83d\udd8a\ufe0f ملاحظات" if LANGUAGE == "ar" else "\ud83d\udd8a\ufe0f Feedback", callback_data="feedback")],
-        [InlineKeyboardButton("\ud83d\udcd6 عن البوت" if LANGUAGE == "ar" else "\ud83d\udcd6 About", callback_data="about")],
-        [InlineKeyboardButton("إعدادات" if LANGUAGE == "ar" else "Settings", callback_data="settings")],  # New button
-        [InlineKeyboardButton("اتصل بنا" if LANGUAGE == "ar" else "Contact Us", callback_data="contact_us")]  # New button
+        [InlineKeyboardButton("\ud83d\udcd6 عن البوت" if LANGUAGE == "ar" else "\ud83d\udcd6 About", callback_data="about")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     if update.message:
@@ -137,40 +127,10 @@ async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup,
     )
 
-# Function to handle the settings menu
-async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("الرجوع" if LANGUAGE == "ar" else "Back", callback_data="main_menu")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await query.edit_message_text(
-        MESSAGES["settings"][LANGUAGE],
-        reply_markup=reply_markup,
-    )
-
-# Function to handle the contact us menu
-async def contact_us(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    keyboard = [
-        [InlineKeyboardButton("الرجوع" if LANGUAGE == "ar" else "Back", callback_data="main_menu")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await query.edit_message_text(
-        MESSAGES["contact_us"][LANGUAGE],
-        reply_markup=reply_markup,
-    )
-
 # Main function to set up the bot
 def main():
-    # Bot token
-    TOKEN = "7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU"
+    # Replace with your new bot's API token
+    TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"
 
     application = Application.builder().token(TOKEN).build()
 
@@ -183,8 +143,6 @@ def main():
     application.add_handler(CallbackQueryHandler(privacy_policy, pattern="^privacy_policy$"))
     application.add_handler(CallbackQueryHandler(feedback, pattern="^feedback$"))
     application.add_handler(CallbackQueryHandler(about, pattern="^about$"))
-    application.add_handler(CallbackQueryHandler(settings, pattern="^settings$"))
-    application.add_handler(CallbackQueryHandler(contact_us, pattern="^contact_us$"))
     application.add_handler(CallbackQueryHandler(main_menu, pattern="^main_menu$"))
 
     # Start the bot
