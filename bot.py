@@ -41,6 +41,24 @@ async def handle_arabic_command(update: Update, context: CallbackContext) -> Non
     elif "اتصل" in user_message:
         await contact_command(update, context)
 
+# Define the /help command handler
+async def help_command(update: Update, context: CallbackContext) -> None:
+    """Send a message when the command /help is issued."""
+    help_message = "اكتب /start للبدء. أو اختر أحد الخيارات من القائمة."
+    await update.message.reply_text(help_message)
+
+# Define the /info command handler
+async def info_command(update: Update, context: CallbackContext) -> None:
+    """Send a message when the command /info is issued."""
+    info_message = "هذه معلومات حول البوت."
+    await update.message.reply_text(info_message)
+
+# Define the /contact command handler
+async def contact_command(update: Update, context: CallbackContext) -> None:
+    """Send a message when the command /contact is issued."""
+    contact_message = "تواصل معنا عبر البريد الإلكتروني: support@example.com"
+    await update.message.reply_text(contact_message)
+
 # Main function to set up and run the bot
 async def main() -> None:
     """Run the Telegram bot."""
@@ -49,6 +67,12 @@ async def main() -> None:
 
     # Add a message handler for custom Arabic commands
     application.add_handler(MessageHandler(filters.TEXT, handle_arabic_command))
+
+    # Add command handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("info", info_command))
+    application.add_handler(CommandHandler("contact", contact_command))
 
     # Start the bot (polling for new updates)
     await application.run_polling()
