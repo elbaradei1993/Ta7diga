@@ -19,8 +19,8 @@ async def start(update: Update, context: CallbackContext) -> None:
 
     # Create a custom keyboard (menu buttons)
     keyboard = [
-        [KeyboardButton("/start"), KeyboardButton("/help")],
-        [KeyboardButton("/info"), KeyboardButton("/contact")]
+        [KeyboardButton("/ابدأ"), KeyboardButton("/مساعدة")],
+        [KeyboardButton("/معلومات"), KeyboardButton("/اتصل")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -30,7 +30,7 @@ async def start(update: Update, context: CallbackContext) -> None:
 # Define the /help command handler
 async def help_command(update: Update, context: CallbackContext) -> None:
     """Send a message when the command /help is issued."""
-    help_message = "اكتب /start للبدء. أو اختر أحد الخيارات من القائمة."
+    help_message = "اكتب /ابدأ للبدء. أو اختر أحد الخيارات من القائمة."
     await update.message.reply_text(help_message)
 
 # Define the /info command handler
@@ -59,10 +59,10 @@ async def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
     # Add command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("info", info_command))
-    application.add_handler(CommandHandler("contact", contact_command))
+    application.add_handler(CommandHandler("ابدأ", start))
+    application.add_handler(CommandHandler("مساعدة", help_command))
+    application.add_handler(CommandHandler("معلومات", info_command))
+    application.add_handler(CommandHandler("اتصل", contact_command))
 
     # Add a message handler to reply to non-command messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
