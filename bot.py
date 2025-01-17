@@ -72,7 +72,7 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Main function to set up the bot
 def main():
     # Replace with your bot's API token
-    TOKEN = "YOUR_BOT_TOKEN"  # Replace with your actual bot token
+    TOKEN = "7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU"  # Replace with your actual bot token
 
     application = Application.builder().token(TOKEN).build()
 
