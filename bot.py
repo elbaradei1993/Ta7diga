@@ -111,12 +111,21 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
+async def delete_webhook(application: Application):
+    await application.bot.delete_webhook()
+
 def main():
     # Replace with your bot's new API token
     TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"
 
     # Create the Application
     application = Application.builder().token(TOKEN).build()
+
+    # Delete existing webhook if active
+    try:
+        await delete_webhook(application)
+    except Exception as e:
+        logger.warning(f"Error deleting webhook: {e}")
 
     # Add command handlers
     application.add_handler(CommandHandler("start", start))
