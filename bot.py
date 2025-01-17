@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 from flask import Flask, request
 import logging
+import asyncio
 
 # Enable logging
 logging.basicConfig(
@@ -90,9 +91,10 @@ def webhook():
     return "OK", 200
 
 # Main function to set up the bot and Flask server
-def main():
+async def main():
     TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"  # Replace with your new bot token
 
+    global application
     application = Application.builder().token(TOKEN).build()
 
     # Add handlers
@@ -100,10 +102,10 @@ def main():
     application.add_handler(CallbackQueryHandler(menu_callback))
 
     # Set webhook URL (replace with your actual server URL)
-    application.bot.set_webhook(url='https://yourdomain.com/webhook')
+    await application.bot.set_webhook(url='https://yourdomain.com/webhook')
 
     # Start Flask app
-    app.run(host="0.0.0.0", port=5000)
+    await asyncio.to_thread(app.run, host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
