@@ -1,7 +1,8 @@
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+import os
 import random
 import logging
+from telegram import Update
+from telegram.ext import Application, CommandHandler, ContextTypes
 
 # Enable logging
 logging.basicConfig(
@@ -112,8 +113,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
 def main():
-    # Replace with your bot's API token
-    TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"
+    # Retrieve the token from environment variables
+    TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 
     # Create the Application
     application = Application.builder().token(TOKEN).build()
