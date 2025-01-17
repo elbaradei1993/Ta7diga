@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 # Store users waiting for a match
 waiting_users = []
 
-# Inline Keyboard Handler
+# Command handler for /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
@@ -30,12 +30,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "مرحبًا! اختر خيارًا من القائمة أدناه:", reply_markup=reply_markup
     )
 
+# Callback query handler
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()  # Acknowledge the query to prevent timeout errors
 
+    # Handle button presses based on callback data
     if query.data == "videochat":
-        await start_video_chat(query, context)
+        await start_video_chat(update, context)
     elif query.data == "privacy":
         await query.edit_message_text(
             text=(
@@ -56,7 +58,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "/privacy - عرض سياسة الخصوصية\n"
                 "/help - عرض هذه الرسالة\n"
                 "/videochat - بدء دردشة فيديو عشوائية\n"
-                "/howto - كيفية استخدام التطبيق"
+                "/howto - كيفية استخدام البوت"
             )
         )
     elif query.data == "howto":
@@ -72,6 +74,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         )
 
+# Command handler for video chat
 async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_name = update.effective_user.first_name
@@ -104,13 +107,13 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.callback_query.edit_message_text("⏳ في انتظار مستخدم آخر للانضمام...")
 
-# Error Handler
+# Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
-# Main Function
+# Main function
 def main():
-    # Use the provided bot token
+    # Replace with your bot's API token
     TOKEN = "7332555745:AAEGdPx1guRECMlIjlxTvms8Xx5EFDELelU"
 
     # Create the Application
