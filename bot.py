@@ -59,10 +59,10 @@ async def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
     # Add command handlers
-    application.add_handler(CommandHandler("ابدأ", start))
-    application.add_handler(CommandHandler("مساعدة", help_command))
-    application.add_handler(CommandHandler("معلومات", info_command))
-    application.add_handler(CommandHandler("اتصل", contact_command))
+    application.add_handler(CommandHandler("/ابدأ", start))
+    application.add_handler(CommandHandler("/مساعدة", help_command))
+    application.add_handler(CommandHandler("/معلومات", info_command))
+    application.add_handler(CommandHandler("/اتصل", contact_command))
 
     # Add a message handler to reply to non-command messages
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
