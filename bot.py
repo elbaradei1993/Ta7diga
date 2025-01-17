@@ -142,8 +142,7 @@ async def main():
     print("Bot is running...")
     await application.run_polling()
 
-# Run the bot
+# Run the bot directly using await, without using asyncio.run()
 if __name__ == "__main__":
-    # No need to use an explicit event loop here
     import asyncio
     asyncio.run(main())  # Let asyncio manage the loop
