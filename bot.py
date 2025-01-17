@@ -1,4 +1,3 @@
-import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import random
@@ -12,13 +11,6 @@ logger = logging.getLogger(__name__)
 
 # Store users waiting for a match
 waiting_users = []
-
-# Fetch the token from the environment variable
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-
-# Ensure the token is retrieved correctly
-if not TOKEN:
-    raise ValueError("Bot token is missing. Please set the TELEGRAM_BOT_TOKEN environment variable.")
 
 # Command handler for /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -120,6 +112,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
 def main():
+    # Hardcoded bot token
+    TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"
+
     # Create the Application
     application = Application.builder().token(TOKEN).build()
 
