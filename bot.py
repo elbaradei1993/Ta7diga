@@ -111,10 +111,6 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
-# Function to delete the webhook
-async def delete_webhook(application: Application):
-    await application.bot.delete_webhook()
-
 # Main asynchronous function to handle bot execution
 async def main():
     # Replace with your bot's API token
@@ -125,7 +121,7 @@ async def main():
 
     # Delete existing webhook if active
     try:
-        await delete_webhook(application)
+        await application.bot.delete_webhook()
     except Exception as e:
         logger.warning(f"Error deleting webhook: {e}")
 
@@ -146,8 +142,8 @@ async def main():
     print("Bot is running...")
     await application.run_polling()
 
-# Run the bot using the existing event loop
+# Run the bot
 if __name__ == "__main__":
+    # No need to use an explicit event loop here
     import asyncio
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(main())
+    asyncio.run(main())  # Let asyncio manage the loop
