@@ -47,9 +47,9 @@ async def main() -> None:
 
 # Ensure this is the main script being run
 if __name__ == '__main__':
-    # If you're in an environment with an already running event loop, use the asyncio event loop directly
+    # Check if the event loop is already running (common in environments like Jupyter)
     try:
-        asyncio.get_event_loop().run_until_complete(main())
+        asyncio.get_event_loop().run_until_complete(main())  # Will work if no event loop is running
     except RuntimeError:
-        # This is for environments where the event loop is already running
+        # If the event loop is already running, use asyncio.run (works in environments like Jupyter)
         asyncio.run(main())
