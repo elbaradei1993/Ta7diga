@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 
@@ -44,6 +45,11 @@ async def main() -> None:
     # Start polling for updates from Telegram
     await application.run_polling()
 
+# Ensure this is the main script being run
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+    # If you're in an environment with an already running event loop, use the asyncio event loop directly
+    try:
+        asyncio.get_event_loop().run_until_complete(main())
+    except RuntimeError:
+        # This is for environments where the event loop is already running
+        asyncio.run(main())
