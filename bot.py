@@ -44,10 +44,8 @@ async def main() -> None:
     # Start polling for updates from Telegram
     await application.run_polling()
 
-# Ensure this is the main script being run
+# Entry point for async execution
 if __name__ == '__main__':
-    try:
-        # Directly call the main function without asyncio.run or loop management
-        main()  # Should work when the environment handles the event loop
-    except Exception as e:
-        logger.error(f"Error starting the bot: {e}")
+    import asyncio
+    # Run the main function within the event loop
+    asyncio.run(main())  # Ensure async handling works properly
