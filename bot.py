@@ -1,51 +1,24 @@
-import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 
-# Enable logging to get detailed info about errors and events
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Token for the new bot
+BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 
-# Define a start command handler to welcome users
-async def start(update: Update, context: CallbackContext) -> None:
-    """Send a message when the command /start is issued."""
-    await update.message.reply_text('Hello, I am your bot!')
+# Define a command handler
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text('Hello! I am the تحديقة bot!')
 
-# Define a help command handler
-async def help(update: Update, context: CallbackContext) -> None:
-    """Send a message when the command /help is issued."""
-    await update.message.reply_text("Use /start to initiate the conversation.")
+# Set up the Application and handlers
+async def main():
+    application = Application.builder().token(BOT_TOKEN).build()
 
-# Function to log errors
-async def error(update: Update, context: CallbackContext) -> None:
-    """Log the errors caused by updates."""
-    logger.warning(f'Update "{update}" caused error "{context.error}"')
+    # Add command handler
+    start_handler = CommandHandler('start', start)
+    application.add_handler(start_handler)
 
-# Main function to set up the bot and start polling
-async def main() -> None:
-    """Start the bot and handle updates."""
-    # Replace with your actual bot token
-    TOKEN = '7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k'
-
-    # Create an Application object and pass it your bot's token
-    application = Application.builder().token(TOKEN).build()
-
-    # Delete any existing webhook to prevent conflicts
-    await application.bot.delete_webhook()
-
-    # Register handlers for /start, /help, and error logging
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help))
-
-    # Register the error handler
-    application.add_error_handler(error)
-
-    # Start polling for updates from Telegram
+    # Start polling for updates
     await application.run_polling()
 
-# Entry point for the bot
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
-    # Use the event loop already running (do not call asyncio.run())
-    asyncio.create_task(main())
+    asyncio.run(main())
