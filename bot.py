@@ -112,8 +112,8 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
 def main():
-    # Hardcoded bot token
-    TOKEN = "7332555745:AAHdJ6hUQbVmwLL_r3NE2erKHFQFn90vRoU"
+    # Updated bot token
+    TOKEN = "7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k"
 
     # Create the Application
     application = Application.builder().token(TOKEN).build()
