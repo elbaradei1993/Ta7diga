@@ -1,46 +1,46 @@
 import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler
 import asyncio
+import nest_asyncio
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Your bot token
-BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
+# Apply nest_asyncio to allow nested event loops
+nest_asyncio.apply()
 
-# Set up logging
-logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
 logger = logging.getLogger(__name__)
 
-# Define command handlers
-async def start(update: Update, context):
-    await update.message.reply_text("Hello! I am your random video chat bot!")
+# Bot token
+BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 
-async def help_command(update: Update, context):
-    await update.message.reply_text("Use /start to start the bot.")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a welcome message when the command /start is issued."""
+    await update.message.reply_text("Welcome to تحديقة! Use /connect to start a random video chat.")
 
-# Main bot setup function
-async def run_bot():
-    # Create the Application
-    application = Application.builder().token(BOT_TOKEN).build()
+async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Generate and send a random Jitsi meet link."""
+    jitsi_base_url = "https://meet.jit.si/"
+    random_meeting_id = f"Tahdiqa_{update.effective_user.id}"
+    jitsi_link = jitsi_base_url + random_meeting_id
+    await update.message.reply_text(f"Your random video chat link: {jitsi_link}")
 
-    # Add handlers
+async def main():
+    """Main function to run the bot."""
+    # Initialize the bot application
+    application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Add command handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("connect", connect))
 
-    # Start the bot
-    logger.info("Bot is starting...")
+    # Run the bot with polling
     await application.run_polling()
 
-# Entry point
 if __name__ == "__main__":
-    try:
-        # Check for an already running event loop
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        # Run the bot within the loop
-        loop.run_until_complete(run_bot())
-    except Exception as e:
-        logger.error(f"Unhandled exception: {e}")
+    # Get the current event loop and run the main function
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
