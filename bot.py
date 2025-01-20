@@ -1,9 +1,11 @@
+import time
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import random
 import logging
 from flask import Flask
 import asyncio
+from telegram.error import RetryAfter
 
 # Enable logging
 logging.basicConfig(
@@ -112,6 +114,18 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
 
+# Retry function to handle Telegram API rate limiting
+async def set_webhook_with_retry(application, webhook_url):
+    retry_delay = 1  # Start with 1 second
+    while True:
+        try:
+            await application.bot.set_webhook(webhook_url)
+            logger.info(f"Webhook successfully set to {webhook_url}")
+            break
+        except RetryAfter as e:
+            logger.warning(f"Rate limit exceeded. Retrying in {e.retry_after} seconds...")
+            await asyncio.sleep(e.retry_after)
+
 # Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
@@ -134,9 +148,9 @@ async def main():
     # Add error handler
     application.add_error_handler(error_handler)
 
-    # Set the webhook URL (await this call)
+    # Set the webhook URL (retry in case of rate limiting)
     webhook_url = "https://your-webhook-url.com"  # Replace with your actual webhook URL
-    await application.bot.set_webhook(webhook_url)
+    await set_webhook_with_retry(application, webhook_url)
 
     # Start the Flask app to handle the webhook
     app.run(host="0.0.0.0", port=5000)
