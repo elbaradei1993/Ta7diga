@@ -1,5 +1,4 @@
 import logging
-import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 
@@ -24,7 +23,7 @@ async def error(update: Update, context: CallbackContext) -> None:
     logger.warning(f'Update "{update}" caused error "{context.error}"')
 
 # Main function to set up the bot and start polling
-async def main() -> None:
+def main() -> None:
     """Start the bot and handle updates."""
     # Replace with your actual bot token
     TOKEN = '7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k'
@@ -33,7 +32,7 @@ async def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
     # Delete any existing webhook to prevent conflicts
-    await application.bot.delete_webhook()
+    application.bot.delete_webhook()
 
     # Register handlers for /start, /help, and error logging
     application.add_handler(CommandHandler("start", start))
@@ -43,19 +42,8 @@ async def main() -> None:
     application.add_error_handler(error)
 
     # Start polling for updates from Telegram
-    await application.run_polling()
+    application.run_polling()
 
-# Entry point for async execution
+# Entry point for the bot
 if __name__ == '__main__':
-    # Check if an event loop is already running
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # If an event loop is running, we don't call asyncio.run()
-            loop.create_task(main())
-        else:
-            # If no event loop is running, we call asyncio.run() to run the main coroutine
-            asyncio.run(main())
-    except RuntimeError as e:
-        # Handle the case where no event loop exists
-        logger.error(f"RuntimeError: {e}")
+    main()
