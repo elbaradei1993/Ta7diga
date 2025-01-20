@@ -4,6 +4,9 @@ import random
 import logging
 from flask import Flask, request
 
+# Define the token here
+TOKEN = "7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k"
+
 # Enable logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -123,9 +126,6 @@ def handle_webhook():
     return 'OK', 200
 
 def main():
-    # Hardcoded bot token
-    TOKEN = "7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k"
-
     # Create the Application
     application = Application.builder().token(TOKEN).build()
 
