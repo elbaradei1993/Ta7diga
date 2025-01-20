@@ -3,39 +3,38 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler
 
 # Your bot token
-BOT_TOKEN = '7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak'
+BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 
 # Set up logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Define command handler
 async def start(update: Update, context):
-    await update.message.reply_text("Hello, I am your random video chat bot!")
+    await update.message.reply_text("Hello! I am your random video chat bot!")
 
-async def help(update: Update, context):
+async def help_command(update: Update, context):
     await update.message.reply_text("Use /start to start the bot.")
 
-# Main function to run the bot
+# Main function to configure and run the bot
 async def main():
-    # Create the Application and pass it your bot's token
+    # Create the Application
     application = Application.builder().token(BOT_TOKEN).build()
 
     # Add handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help))
+    application.add_handler(CommandHandler("help", help_command))
 
-    # Start polling
+    # Run the bot
+    logger.info("Bot is starting...")
     await application.run_polling()
 
-# Run the bot
-if __name__ == '__main__':
+# Entry point
+if __name__ == "__main__":
     import asyncio
 
-    # If an event loop is already running (for environments like Jupyter notebooks), just call the async function
+    # Use asyncio.run to handle the event loop correctly
     try:
-        asyncio.get_event_loop().run_until_complete(main())
-    except RuntimeError:
-        # If no event loop is running, create one
         asyncio.run(main())
+    except RuntimeError as e:
+        logger.error(f"RuntimeError encountered: {e}")
