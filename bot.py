@@ -47,9 +47,14 @@ async def main() -> None:
 
 # Ensure this is the main script being run
 if __name__ == '__main__':
-    # Check if the event loop is already running (common in environments like Jupyter)
+    # Check if there's already a running event loop
     try:
-        asyncio.get_event_loop().run_until_complete(main())  # Will work if no event loop is running
-    except RuntimeError:
-        # If the event loop is already running, use asyncio.run (works in environments like Jupyter)
-        asyncio.run(main())
+        # Try running using asyncio.run() only if there's no active event loop
+        if not asyncio.get_event_loop().is_running():
+            asyncio.run(main())
+        else:
+            # If an event loop is already running, run the main function directly
+            loop = asyncio.get_event_loop()
+            loop.create_task(main())
+    except RuntimeError as e:
+        logger.error(f"RuntimeError: {str(e)}")
