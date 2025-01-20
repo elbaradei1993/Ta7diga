@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from telegram import Update
 from telegram.ext import Application, CommandHandler, CallbackContext
 
@@ -46,6 +47,15 @@ async def main() -> None:
 
 # Entry point for async execution
 if __name__ == '__main__':
-    import asyncio
-    # Run the main function within the event loop
-    asyncio.run(main())  # Ensure async handling works properly
+    # Check if an event loop is already running
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If an event loop is running, we don't call asyncio.run()
+            loop.create_task(main())
+        else:
+            # If no event loop is running, we call asyncio.run() to run the main coroutine
+            asyncio.run(main())
+    except RuntimeError as e:
+        # Handle the case where no event loop exists
+        logger.error(f"RuntimeError: {e}")
