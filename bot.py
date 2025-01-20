@@ -32,4 +32,10 @@ async def main():
 # Run the bot
 if __name__ == '__main__':
     import asyncio
-    asyncio.create_task(main())
+
+    # If an event loop is already running (for environments like Jupyter notebooks), just call the async function
+    try:
+        asyncio.get_event_loop().run_until_complete(main())
+    except RuntimeError:
+        # If no event loop is running, create one
+        asyncio.run(main())
