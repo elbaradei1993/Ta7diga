@@ -1,55 +1,35 @@
-import random
 import logging
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
-import requests
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 
-# Configure logging
+# Your bot token
+BOT_TOKEN = '7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak'
+
+# Set up logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Jitsi server URL (make sure to configure your Jitsi server here)
-JITSI_SERVER = "https://meet.jit.si"
+# Define command handler
+async def start(update: Update, context):
+    await update.message.reply_text("Hello, I am your random video chat bot!")
 
-# Function to start a random video chat
-def start_random_chat(update: Update, context: CallbackContext):
-    chat_id = update.message.chat_id
-    user_name = update.message.from_user.first_name
+async def help(update: Update, context):
+    await update.message.reply_text("Use /start to start the bot.")
 
-    # Generate a random room name for the chat
-    room_name = f"randomchat_{random.randint(1000, 9999)}"
+# Main function to run the bot
+async def main():
+    # Create the Application and pass it your bot's token
+    application = Application.builder().token(BOT_TOKEN).build()
 
-    # Generate the Jitsi link
-    jitsi_link = f"{JITSI_SERVER}/{room_name}"
+    # Add handlers
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help))
 
-    # Send the user the generated link
-    update.message.reply_text(f"Hello {user_name}! You've been connected to a random chat.\n"
-                              f"Click to join the video call: {jitsi_link}\n\n"
-                              f"Enjoy your conversation!")
+    # Start polling
+    await application.run_polling()
 
-# Function to start the bot and set up commands
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text("Welcome to the Random Video Chat Bot! Type /randomchat to get started.")
-
-# Main function to set up the bot
-def main():
-    # Set up your bot token from the environment or your direct token
-    bot_token = '7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak'
-    updater = Updater(bot_token, use_context=True)
-
-    # Get the dispatcher to register handlers
-    dispatcher = updater.dispatcher
-
-    # Command handlers
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("randomchat", start_random_chat))
-
-    # Start polling for updates
-    updater.start_polling()
-
-    # Run the bot until you press Ctrl+C
-    updater.idle()
-
+# Run the bot
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())
