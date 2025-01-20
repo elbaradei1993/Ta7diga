@@ -10,7 +10,7 @@ nest_asyncio.apply()
 # Enable logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    level=logging.INFO,
+    level=logging.DEBUG,  # Set to DEBUG to capture more detailed logs
 )
 logger = logging.getLogger(__name__)
 
@@ -20,11 +20,13 @@ BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 # Command to start the bot
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message when the command /start is issued."""
+    logger.info(f"/start command received from {update.message.from_user.id}")
     await update.message.reply_text("Welcome to تحديقة! Use /connect to start a random video chat.")
 
 # Command to connect users via random Jitsi video chat
 async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Generate and send a random Jitsi meet link."""
+    logger.info(f"/connect command received from {update.message.from_user.id}")
     jitsi_base_url = "https://meet.jit.si/"
     random_meeting_id = f"Tahdiqa_{update.effective_user.id}"
     jitsi_link = jitsi_base_url + random_meeting_id
@@ -32,6 +34,7 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Command to provide help info
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.info(f"/help command received from {update.message.from_user.id}")
     help_message = (
         "🛠 **List of Commands**\n\n"
         "/start - Start the bot\n"
@@ -40,6 +43,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     )
     await update.message.reply_text(help_message)
 
+# Main function to run the bot
 async def main():
     """Main function to run the bot."""
     # Initialize the bot application
@@ -51,6 +55,7 @@ async def main():
     application.add_handler(CommandHandler("help", help_command))
 
     # Run the bot with polling
+    logger.info("Bot started and is polling for updates.")
     await application.run_polling()
 
 if __name__ == "__main__":
