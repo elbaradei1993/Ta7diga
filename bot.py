@@ -1,6 +1,6 @@
 import logging
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler
 
 # Your bot token
 BOT_TOKEN = '7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak'
@@ -32,4 +32,4 @@ async def main():
 # Run the bot
 if __name__ == '__main__':
     import asyncio
-    asyncio.run(main())
+    asyncio.create_task(main())
