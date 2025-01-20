@@ -47,4 +47,5 @@ async def main() -> None:
 # Entry point for the bot
 if __name__ == '__main__':
     import asyncio
-    asyncio.run(main())  # Ensure async handling works properly
+    # Use the event loop already running (do not call asyncio.run())
+    asyncio.create_task(main())
