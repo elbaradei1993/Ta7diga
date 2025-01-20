@@ -2,6 +2,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import random
 import logging
+from flask import Flask, request
 
 # Enable logging
 logging.basicConfig(
@@ -111,8 +112,18 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
+# Flask application to handle webhooks
+app = Flask(__name__)
+
+@app.route(f"/{TOKEN}", methods=["POST"])
+def handle_webhook():
+    json_str = request.get_data(as_text=True)
+    update = Update.de_json(json_str, application.bot)
+    application.update_queue.put(update)
+    return 'OK', 200
+
 def main():
-    # Updated bot token
+    # Hardcoded bot token
     TOKEN = "7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k"
 
     # Create the Application
@@ -128,9 +139,12 @@ def main():
     # Add error handler
     application.add_error_handler(error_handler)
 
-    # Start the bot
-    print("Bot is running...")
-    application.run_polling()
+    # Set the webhook URL
+    webhook_url = "https://your-webhook-url.com"  # Replace with your actual webhook URL
+    application.bot.set_webhook(webhook_url)
+
+    # Start the Flask app to handle the webhook
+    app.run(host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
     main()
