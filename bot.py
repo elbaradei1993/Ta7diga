@@ -23,7 +23,7 @@ async def error(update: Update, context: CallbackContext) -> None:
     logger.warning(f'Update "{update}" caused error "{context.error}"')
 
 # Main function to set up the bot and start polling
-def main() -> None:
+async def main() -> None:
     """Start the bot and handle updates."""
     # Replace with your actual bot token
     TOKEN = '7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k'
@@ -32,7 +32,7 @@ def main() -> None:
     application = Application.builder().token(TOKEN).build()
 
     # Delete any existing webhook to prevent conflicts
-    application.bot.delete_webhook()
+    await application.bot.delete_webhook()
 
     # Register handlers for /start, /help, and error logging
     application.add_handler(CommandHandler("start", start))
@@ -42,8 +42,9 @@ def main() -> None:
     application.add_error_handler(error)
 
     # Start polling for updates from Telegram
-    application.run_polling()
+    await application.run_polling()
 
 # Entry point for the bot
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())  # Ensure async handling works properly
