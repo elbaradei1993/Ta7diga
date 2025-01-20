@@ -31,6 +31,9 @@ def main() -> None:
     # Create an Application object and pass it your bot's token
     application = Application.builder().token(TOKEN).build()
 
+    # Delete any existing webhook to prevent conflicts
+    application.bot.delete_webhook()
+
     # Register handlers for /start, /help, and error logging
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help))
