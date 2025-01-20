@@ -2,10 +2,8 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import random
 import logging
-from flask import Flask, request
-
-# Define the token here
-TOKEN = "7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k"
+from flask import Flask
+import asyncio
 
 # Enable logging
 logging.basicConfig(
@@ -15,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 # Store users waiting for a match
 waiting_users = []
+
+# Create Flask app
+app = Flask(__name__)
 
 # Command handler for /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -115,17 +116,11 @@ async def start_video_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.error(f"Error: {context.error}")
 
-# Flask application to handle webhooks
-app = Flask(__name__)
+# Main function to start the bot and set the webhook
+async def main():
+    # Define your bot's token here
+    TOKEN = "7332555745:AAGvky70vii-MI6KAQDOZWvLFKdNkH82t8k"
 
-@app.route(f"/{TOKEN}", methods=["POST"])
-def handle_webhook():
-    json_str = request.get_data(as_text=True)
-    update = Update.de_json(json_str, application.bot)
-    application.update_queue.put(update)
-    return 'OK', 200
-
-def main():
     # Create the Application
     application = Application.builder().token(TOKEN).build()
 
@@ -139,12 +134,14 @@ def main():
     # Add error handler
     application.add_error_handler(error_handler)
 
-    # Set the webhook URL
+    # Set the webhook URL (await this call)
     webhook_url = "https://your-webhook-url.com"  # Replace with your actual webhook URL
-    application.bot.set_webhook(webhook_url)
+    await application.bot.set_webhook(webhook_url)
 
     # Start the Flask app to handle the webhook
     app.run(host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
-    main()
+    # Run the asynchronous main function
+    import asyncio
+    asyncio.run(main())
