@@ -2,7 +2,7 @@ import random
 import logging
 import asyncio
 import nest_asyncio
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 # Apply nest_asyncio to allow nested event loops
@@ -23,6 +23,13 @@ waiting_users = []
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message when the command /start is issued."""
+    # Create an inline keyboard button to open the mini app
+    keyboard = [
+        [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "https://your-app.railway.app"})]  # Replace with your actual Mini App URL
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Send the welcome message with the button
     await update.message.reply_text("مرحبًا! أنا تحديقة دردشة الفيديو العشوائية. 🎥\n\n"
                                    "✨ **ماذا أقدم؟**\n"
                                    "- يمكنك بدء دردشة فيديو عشوائية مع مستخدمين آخرين.\n"
@@ -41,7 +48,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                                    "- وافق على استخدام الكاميرا والميكروفون لبدء المحادثة.\n"
                                    "- لا تستخدم رابط المحادثة القديم.\n"
                                    "- اضغط /connect في كل مرة تريد بدء محادثة جديدة.\n\n"
-                                   "إذا كانت لديك أي أسئلة، فلا تتردد في التواصل معنا. 😊")
+                                   "إذا كانت لديك أي أسئلة، فلا تتردد في التواصل معنا. 😊", 
+                                   reply_markup=reply_markup)
 
 async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start a random video chat for the user by pairing them with another user."""
@@ -72,7 +80,6 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     else:
         await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
-        
 
 async def howto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send instructions on how to use the bot."""
