@@ -25,7 +25,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message when the command /start is issued."""
     # Create an inline keyboard button to open the mini app
     keyboard = [
-        [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "https://your-app.railway.app"})]  # Replace with your actual Mini App URL
+        [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "ta7diga-mini-app-production.up.railway.app"})]  # Replace with your actual Mini App URL
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
