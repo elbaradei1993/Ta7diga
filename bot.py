@@ -21,13 +21,16 @@ BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 # List to hold users waiting for a video chat
 waiting_users = []
 
+# Dictionary to store profiles
+user_profiles = {}
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message when the command /start is issued."""
     logger.info(f"Start command received from {update.message.from_user.first_name} ({update.message.from_user.id})")
     
     # Create an inline keyboard button to open the mini app
     keyboard = [
-        [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "https://ta7diga-mini-app-production.up.railway.app"})]  # Your app URL
+        [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "https://ta7diga-mini-app-production.up.railway.app"})]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -74,8 +77,8 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user1 = waiting_users.pop(0)
         user2 = waiting_users.pop(0)
 
-        # Use a fixed Jitsi room name to avoid authentication issues
-        room_name = "ta7diga-chat"
+        # Generate a unique Jitsi room name
+        room_name = f"ta7diga-chat-{random.randint(1000, 9999)}"
         video_chat_link = f"https://meet.jit.si/{room_name}"
 
         # Notify both users
@@ -117,6 +120,8 @@ async def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("connect", connect))
     application.add_handler(CommandHandler("howto", howto))
+    application.add_handler(CommandHandler("editprofile", edit_profile))
+    application.add_handler(CommandHandler("updateprofile", update_profile))
 
     logger.info("Starting bot polling...")
     # Run the bot with polling
@@ -124,6 +129,5 @@ async def main():
 
 if __name__ == "__main__":
     logger.info("Starting the main function...")
-    # Get the current event loop and run the main function
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
