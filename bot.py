@@ -26,9 +26,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message when the command /start is issued."""
     logger.info(f"Start command received from {update.message.from_user.first_name} ({update.message.from_user.id})")
     
-    # Create an inline keyboard button to open the mini app
+    # Create an inline keyboard button to start the chat connection (removed the mini app button)
     keyboard = [
-        [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "https://ta7diga-mini-app-production.up.railway.app"})]  # Your app URL
+        [InlineKeyboardButton("ابدأ محادثة جديدة", callback_data='start_chat')]  # Just the chat connection button
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -85,7 +85,7 @@ async def howto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "🛠 **كيفية استخدام البوت**\n"
         "1. البوت سيفتح المتصفح.\n"
-        "2. اختر مكان استخدامه (جوال أو كمبيوتر).\n"
+        "2. اختر مكان استخدامه (المتصفح).\n"
         "3. لا حاجة لتنزيل 'Jitsi'.\n"
         "4. وافق على استخدام الكاميرا والميكروفون لبدء المحادثة.\n"
         "5. لا تستخدم رابط المحادثة القديم.\n"
