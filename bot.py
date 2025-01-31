@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 
 # Jitsi JWT authentication details
-JITSI_SECRET = "YOUR_JITSI_SECRET"
+JITSI_SECRET = ""
 JITSI_APP_ID = "your-app-id"
 JITSI_DOMAIN = "https://meet.jit.si"
 
