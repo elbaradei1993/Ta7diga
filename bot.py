@@ -56,20 +56,25 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
     user_name = update.message.from_user.first_name
 
+    # Check if the user is already in the waiting list
+    for u in waiting_users:
+        if u[0] == user_id:
+            await update.message.reply_text("⏳ أنت بالفعل في قائمة الانتظار، يرجى الانتظار لمطابقتك مع شخص آخر.")
+            return
+
     # Add user to the waiting list
     waiting_users.append((user_id, user_name))
 
     if len(waiting_users) >= 2:
-        # Pair users
-        user1, user2 = random.sample(waiting_users, 2)
-        waiting_users.remove(user1)
-        waiting_users.remove(user2)
+        # Pair the first two users in the queue
+        user1 = waiting_users.pop(0)
+        user2 = waiting_users.pop(0)
 
         # Generate a unique video chat link using Jitsi
         room_name = f"random-chat-{user1[0]}-{user2[0]}"
         video_chat_link = f"https://meet.jit.si/{room_name}"
 
-        # Send the link to both users
+        # Notify both users
         await context.bot.send_message(
             chat_id=user1[0],
             text=f"🎥 لقد تم إقرانك مع {user2[1]}! اضغط هنا للانضمام إلى محادثة الفيديو: {video_chat_link}"
