@@ -23,7 +23,7 @@ BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 # Jitsi JWT authentication details
 JITSI_SECRET = "YOUR_JITSI_SECRET"
 JITSI_APP_ID = "your-app-id"
-JITSI_DOMAIN = "your-jitsi-server.com"
+JITSI_DOMAIN = "https://meet.jit.si"
 
 # List to hold users waiting for a video chat
 waiting_users = []
