@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
 
-# Enable logging
+# Enable logging for better debugging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     level=logging.INFO,
@@ -23,6 +23,8 @@ waiting_users = []
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message when the command /start is issued."""
+    logger.info(f"Start command received from {update.message.from_user.first_name} ({update.message.from_user.id})")
+    
     # Create an inline keyboard button to open the mini app
     keyboard = [
         [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "https://ta7diga-mini-app-production.up.railway.app"})]  # Your app URL
@@ -55,6 +57,7 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start a random video chat for the user by pairing them with another user."""
     user_id = update.message.from_user.id
     user_name = update.message.from_user.first_name
+    logger.info(f"Connect command received from {user_name} ({user_id})")
 
     # Check if the user is already in the waiting list
     for u in waiting_users:
@@ -64,6 +67,7 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     # Add user to the waiting list
     waiting_users.append((user_id, user_name))
+    logger.info(f"User {user_name} added to the waiting list. Total users in queue: {len(waiting_users)}")
 
     if len(waiting_users) >= 2:
         # Pair the first two users in the queue
@@ -83,11 +87,15 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             chat_id=user2[0],
             text=f"🎥 لقد تم إقرانك مع {user1[1]}! اضغط هنا للانضمام إلى محادثة الفيديو: {video_chat_link}"
         )
+        logger.info(f"Users {user1[1]} and {user2[1]} paired successfully.")
     else:
+        # Notify the user to wait for another user
         await update.message.reply_text("⏳ في انتظار مستخدم آخر للانضمام...")
+        logger.info(f"User {user_name} is waiting for another user to join.")
 
 async def howto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send instructions on how to use the bot."""
+    logger.info(f"How-to command received from {update.message.from_user.first_name} ({update.message.from_user.id})")
     await update.message.reply_text(
         "🛠 **كيفية استخدام البوت**\n"
         "1. البوت سيفتح المتصفح.\n"
@@ -100,6 +108,8 @@ async def howto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def main():
     """Main function to run the bot."""
+    logger.info("Bot is starting...")
+
     # Initialize the bot application
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -108,10 +118,12 @@ async def main():
     application.add_handler(CommandHandler("connect", connect))
     application.add_handler(CommandHandler("howto", howto))
 
+    logger.info("Starting bot polling...")
     # Run the bot with polling
     await application.run_polling()
 
 if __name__ == "__main__":
+    logger.info("Starting the main function...")
     # Get the current event loop and run the main function
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
