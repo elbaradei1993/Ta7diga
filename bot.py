@@ -94,8 +94,8 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         token2 = generate_jitsi_token(user_id, user_name)
 
         # Jitsi Room URL with authentication
-        video_chat_link1 = f"https://{JITSI_DOMAIN}/ta7diga-chat?jwt={token1}"
-        video_chat_link2 = f"https://{JITSI_DOMAIN}/ta7diga-chat?jwt={token2}"
+        video_chat_link1 = f"https://meet.jit.si/ta7diga-chat?jwt={token1}"
+        video_chat_link2 = f"https://meet.jit.si/ta7diga-chat?jwt={token2}"
 
         # Notify users with their respective links
         await context.bot.send_message(
