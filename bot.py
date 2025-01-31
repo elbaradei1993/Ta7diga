@@ -3,7 +3,7 @@ import logging
 import asyncio
 import nest_asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -20,8 +20,6 @@ BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 
 # List to hold users waiting for a video chat
 waiting_users = []
-
-# Dictionary to store profiles
 user_profiles = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -30,7 +28,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     # Create an inline keyboard button to open the mini app
     keyboard = [
-        [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "https://ta7diga-mini-app-production.up.railway.app"})]
+        [InlineKeyboardButton("افتح تطبيق الدردشة العشوائية", web_app={"url": "https://ta7diga-mini-app-production.up.railway.app"})]  # Your app URL
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
@@ -77,8 +75,8 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user1 = waiting_users.pop(0)
         user2 = waiting_users.pop(0)
 
-        # Generate a unique Jitsi room name
-        room_name = f"ta7diga-chat-{random.randint(1000, 9999)}"
+        # Use a fixed Jitsi room name to avoid authentication issues
+        room_name = "ta7diga-chat"
         video_chat_link = f"https://meet.jit.si/{room_name}"
 
         # Notify both users
@@ -109,6 +107,39 @@ async def howto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "6. اضغط /connect في كل مرة تريد بدء محادثة جديدة."
     )
 
+async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Allow users to edit their profile (name or photo)."""
+    user_id = update.message.from_user.id
+
+    # Check if the user has a profile
+    if user_id not in user_profiles:
+        user_profiles[user_id] = {"name": update.message.from_user.first_name, "photo": None}
+
+    # Send a message asking the user what they want to update
+    await update.message.reply_text("🔧 ماذا ترغب في تحديثه؟\n"
+                                   "1. تغيير الاسم\n"
+                                   "2. رفع صورة الملف الشخصي\n"
+                                   "رد على هذه الرسالة مع الرقم الخاص باختيارك.")
+
+async def handle_profile_update(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle the profile updates (name or photo)."""
+    user_id = update.message.from_user.id
+    user_choice = update.message.text.strip()
+
+    if user_choice == "1":  # Change Name
+        # Prompt the user to enter the new name
+        await update.message.reply_text("من فضلك أدخل اسمك الجديد:")
+        # Store the new name in a variable or prompt for further input.
+        user_profiles[user_id]["name"] = update.message.text
+        await update.message.reply_text(f"تم تحديث اسمك إلى {update.message.text}.")
+        
+    elif user_choice == "2":  # Upload Profile Picture
+        # Handle the logic for uploading and saving profile pictures
+        await update.message.reply_text("من فضلك أرسل صورة الملف الشخصي الجديدة.")
+        # Process and store the photo from the user's input.
+        user_profiles[user_id]["photo"] = update.message.photo[-1].file_id
+        await update.message.reply_text("تم تحديث صورة الملف الشخصي!")
+
 async def main():
     """Main function to run the bot."""
     logger.info("Bot is starting...")
@@ -121,7 +152,9 @@ async def main():
     application.add_handler(CommandHandler("connect", connect))
     application.add_handler(CommandHandler("howto", howto))
     application.add_handler(CommandHandler("editprofile", edit_profile))
-    application.add_handler(CommandHandler("updateprofile", update_profile))
+
+    # Add a message handler to process user replies for profile updates
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_profile_update))
 
     logger.info("Starting bot polling...")
     # Run the bot with polling
@@ -129,5 +162,6 @@ async def main():
 
 if __name__ == "__main__":
     logger.info("Starting the main function...")
+    # Get the current event loop and run the main function
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
