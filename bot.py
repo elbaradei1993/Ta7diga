@@ -4,6 +4,8 @@ import asyncio
 import nest_asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, CallbackQuery
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
+import firebase_admin
+from firebase_admin import credentials, db
 
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -14,6 +16,37 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+# Firebase Admin SDK credentials setup
+cred = credentials.Certificate({
+    "type": "service_account",
+    "project_id": "ta7diga",
+    "private_key_id": "71d893e61659b679b0268d0be5869240a7d0185e",
+    "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCbz+2hXxU7j8w0\n5lR2zIjZdJjhEceztibuITpNVJbVyEwv1wTEKlS+cHW3AmootWNSZVGjI5upWP89\ny8hT1RwIzBx2PnhXQs/z75jgyv14KUZ/9aeAAxTS6Qs1LYRR3vxGA3s4OtyJFn6i\nHc/3+1Qs2ewzgN/Y01UDsxM9mbrQRq6EJQgr959j3vgJrbz1kH8wAUce5iDFPe47\nAksB9xDVoY8lo7uAxw6eZ5w7fPLud7qVquD/9kAJQDF2zQpRdJW2qoso5M9PWbD/\nqitOBGmgVOVe9eDwI4SUInZMv7LVArTxAT4d3ONjHFbGeceXqMR9DIcznxWApwbs\nR+JFcnAbAgMBAAECggEALMHOL1gaR8k3Lgzpv1RijSB+l8xdMqTEywuVbUg6qb9H\nD0jzEAxe2nOAhOj3KKluFemPyU59tOghLZWffmFNk8NZ+6dXNy20gYxWPGBi7gTh\nQPmGO3HnJeyWcRiZlVD543y1hQH3fpONHbF1n3S9CcMxo9vFsUmHdrAWe0/xB0mL\nq0qwkOk3a51MNIAaZ+ZbL8fTTs88ypjj/gkCxKjg4u7sY1fXzN9D6aeOTa6CX/tL\nr6qJFzHaRBhYgmznPJOyJk6AWUIRMJ9H9Djb0Ht0lK+hkUcMPMtrXSwSNJjrWaRk\nNSL30X8hESl++Zxz+hyrCDr+PYnZu3PtYXcfLq9cKQKBgQDMbU3G8lTa4Ye1qbl/\nsABUm3xA6qhpb6F/biWviu5FolkZ+WvH3C0YiBAVBfa+DSw7FfIDFA9ZWOGx+X9Q\noHiuUsYUd86AaiPclaADOHLOvULAH6YlUHaspiWC1KGC+hsGd0vypIzsFvA8kC1M\nvLsis0NAkAO4quSP1jyBugia+QKBgQDDHuSjQYMo9tEF/H1o0jWsZaik/iivQJeM\nuZQ0T4dLO8VpIKgY5LKJbc7x01Mdrla27xyi2lqQeYSLn1zImHyxYigUmEqRdvCX\ncCsa/bFbWj70xsPrP4K9eOz19laUuMF1PtSslPBHXKxcv5yBnp3Y4J/sTaYn/lzh\nGGPhpu+0swKBgAhnPdk9wOs2diOrlGqBS6Iuug7ZFo8u/Y6FcpsitOS75bnBnQKc\nNGZbwX17v0bUt8q9/jLOMktT8gMk5GzmC8/uqyHQQvbYZhz9MZSwT1fcQ9At/OBv\nzFEQi14za2g867t6T+7rgLd7wehbbOFIqNCmWc9fnCeNLtQS1G3ovc3RAoGBAMFT\nTKpM8M2XrwbFYuSG0tNbbjr78AekcgPmo+conR53vGMrDiKMBjGQcSi9f267HAPo\n6nCY9H6NSDymy2GdZH7EiH3PXqK+PCdv5eW6Uw32XsZcYiYmKT3eILqbNrHoVRX8\nCPBuKZwrQEQtPb5YEIGgHhQd43Fg31nPtrcPlhVtAoGASdbhNslraeeZOZbkBnoG\no+D1za1I/06ghYjpm3qwl9MKPChrukSMY2EuElvlvpBk1ozTqYpLyxgrAbDvE7rv\nfEmjR+gjr4JSTAC6kWjZOuTTNpfp7F3upqGJGL+9b0DWogK4GA0nD3TAtwzhJtuz\nKDH9getAA4yz0jqS8IlPd+4=\n-----END PRIVATE KEY-----\n",
+    "client_email": "firebase-adminsdk-fbsvc@ta7diga.iam.gserviceaccount.com",
+    "client_id": "107807975434460440132",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40ta7diga.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+})
+
+# Initialize Firebase app
+firebase_admin.initialize_app(cred, {
+    'databaseURL': 'https://ta7diga.firebaseio.com'  # Replace with your Firebase Realtime Database URL
+})
+
+# Function to write to Firebase Realtime Database
+def write_to_firebase(data):
+    ref = db.reference('/users')
+    ref.push(data)
+
+# Function to read from Firebase
+def read_from_firebase():
+    ref = db.reference('/users')
+    data = ref.get()
+    return data
 
 # Bot token
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
@@ -30,7 +63,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [InlineKeyboardButton("ابدأ محادثة جديدة", callback_data="connect")],
         [InlineKeyboardButton("كيفية الاستخدام", callback_data="howto")],
         [InlineKeyboardButton("سياسة الخصوصية", callback_data="privacy")],
-        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],  # Contact button for all users
+        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],
     ]
     if update.message.from_user.id in ADMINS:
         keyboard.append([InlineKeyboardButton("لوحة الإدارة", callback_data="admin_panel")])  # Admin panel for admins
@@ -58,6 +91,9 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         # Notify both users about the match
         await context.bot.send_message(chat_id=matched_user[0], text=f"🎥 تم إقرانك مع {user_name}! [انضم للمحادثة]({video_chat_link})", parse_mode="Markdown")
         await context.bot.send_message(chat_id=user_id, text=f"🎥 تم إقرانك مع {matched_user[1]}! [انضم للمحادثة]({video_chat_link})", parse_mode="Markdown")
+
+        # Log the user connection to Firebase
+        write_to_firebase({"user1_id": matched_user[0], "user2_id": user_id, "video_chat_link": video_chat_link})
     else:
         # Add user to waiting list
         waiting_users.append((user_id, user_name))
@@ -91,7 +127,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     keyboard = [
-        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],  # Contact button for admins in admin panel
+        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],
         [InlineKeyboardButton("📜 حظر مستخدم", callback_data="ban_user")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
