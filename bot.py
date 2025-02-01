@@ -22,6 +22,7 @@ BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 waiting_users = []
 user_profiles = {}
 ADMINS = [123456789]  # Replace with actual Telegram user IDs
+banned_users = []  # List of banned users
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message when the command /start is issued."""
@@ -42,6 +43,10 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = query.from_user.id
     user_name = query.from_user.first_name
     
+    if user_id in banned_users:
+        await query.edit_message_text("❌ تم حظرك من استخدام البوت.")
+        return
+
     if len(waiting_users) >= 1:
         matched_user = waiting_users.pop(0)
         video_chat_link = f"https://meet.jit.si/ta7diga-chat-{random.randint(1000, 9999)}"
@@ -79,7 +84,10 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await query.edit_message_text("❌ ليس لديك صلاحية الوصول إلى لوحة الإدارة.")
         return
 
-    keyboard = [[InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")]]
+    keyboard = [
+        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],
+        [InlineKeyboardButton("📜 حظر مستخدم", callback_data="ban_user")],
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(f"📊 المستخدمون المتصلون الآن: {len(waiting_users)}\nاختر خيارًا أدناه:", reply_markup=reply_markup)
 
@@ -89,6 +97,20 @@ async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await query.answer()
     contact_link = "https://t.me/Felba"
     await query.edit_message_text(f"📧 [تواصل معنا عبر تيليجرام](<{contact_link}>)", parse_mode="Markdown")
+
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Allow admins to ban a user."""
+    query = update.callback_query
+    await query.answer()
+    if query.from_user.id not in ADMINS:
+        await query.edit_message_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة.")
+        return
+
+    # Request user ID for banning
+    await query.edit_message_text("🛑 أرسل لي معرف المستخدم (User ID) الذي ترغب في حظره.")
+    user_input = await context.bot.get_updates()[-1].message.text
+    banned_users.append(user_input)
+    await query.edit_message_text(f"تم حظر المستخدم {user_input} بنجاح!")
 
 async def main():
     """Main function to run the bot."""
@@ -101,6 +123,7 @@ async def main():
     application.add_handler(CallbackQueryHandler(privacy, pattern="^privacy$"))
     application.add_handler(CallbackQueryHandler(admin_panel, pattern="^admin_panel$"))
     application.add_handler(CallbackQueryHandler(contact, pattern="^contact$"))
+    application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_user$"))
 
     await application.run_polling()
 
