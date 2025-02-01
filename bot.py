@@ -44,17 +44,21 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = query.from_user.id
     user_name = query.from_user.first_name
     
+    # Check if the user is banned
     if user_id in banned_users:
         await query.edit_message_text("❌ تم حظرك من استخدام البوت.")
         return
 
+    # If there is already a user in the waiting list, pair them
     if len(waiting_users) >= 1:
         matched_user = waiting_users.pop(0)
         video_chat_link = f"https://meet.jit.si/ta7diga-chat-{random.randint(1000, 9999)}"
 
+        # Notify both users about the match
         await context.bot.send_message(chat_id=matched_user[0], text=f"🎥 تم إقرانك مع {user_name}! [انضم للمحادثة]({video_chat_link})", parse_mode="Markdown")
         await context.bot.send_message(chat_id=user_id, text=f"🎥 تم إقرانك مع {matched_user[1]}! [انضم للمحادثة]({video_chat_link})", parse_mode="Markdown")
     else:
+        # Add user to waiting list
         waiting_users.append((user_id, user_name))
         await query.edit_message_text("⏳ في انتظار مستخدم آخر للانضمام...")
 
