@@ -53,7 +53,7 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if len(waiting_users) >= 1:
         matched_user = waiting_users.pop(0)
         # Create a unique Jitsi meeting link for both users
-        video_chat_link = f"https://meet.jit.si/ta7diga-chat-{random.randint(1000, 9999)}"
+        video_chat_link = f"https://meet.jit.si/ta7diga-chat-{random.randint(1000, 9999)}?start=true"
 
         # Notify both users about the match
         await context.bot.send_message(chat_id=matched_user[0], text=f"🎥 تم إقرانك مع {user_name}! [انضم للمحادثة]({video_chat_link})", parse_mode="Markdown")
