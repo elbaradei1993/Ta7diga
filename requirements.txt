@@ -2,3 +2,4 @@ python-telegram-bot==20.5
 nest_asyncio==1.5.4
 fastapi
 pyjwt
+firebase-admin==6.0.1
