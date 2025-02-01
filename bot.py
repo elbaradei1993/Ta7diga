@@ -21,7 +21,7 @@ BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 # List to hold users waiting for a video chat
 waiting_users = []
 user_profiles = {}
-ADMINS = [123456789]  # Replace with actual Telegram user IDs
+ADMINS = [1796978458]  # Admin ID list (update with actual IDs)
 banned_users = []  # List of banned users
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -30,9 +30,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [InlineKeyboardButton("ابدأ محادثة جديدة", callback_data="connect")],
         [InlineKeyboardButton("كيفية الاستخدام", callback_data="howto")],
         [InlineKeyboardButton("سياسة الخصوصية", callback_data="privacy")],
+        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],  # Contact button for all users
     ]
     if update.message.from_user.id in ADMINS:
-        keyboard.append([InlineKeyboardButton("لوحة الإدارة", callback_data="admin_panel")])
+        keyboard.append([InlineKeyboardButton("لوحة الإدارة", callback_data="admin_panel")])  # Admin panel for admins
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("مرحبًا بك في تحديقة! اختر أحد الخيارات أدناه:", reply_markup=reply_markup)
 
@@ -85,7 +86,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         return
 
     keyboard = [
-        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],
+        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],  # Contact button for admins in admin panel
         [InlineKeyboardButton("📜 حظر مستخدم", callback_data="ban_user")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
