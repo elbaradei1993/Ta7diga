@@ -18,6 +18,9 @@ logger = logging.getLogger(__name__)
 # Bot token
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 
+# Queue for users waiting to be paired
+waiting_users = []
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send a welcome message with inline buttons."""
     keyboard = [
@@ -36,12 +39,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Send the user a Jitsi video chat link."""
+    """Match users before sending a Jitsi link."""
     query = update.callback_query
-    await query.answer()
+    user_id = query.from_user.id
     
-    video_chat_link = "https://meet.jit.si/ta7diga-chat"
-    await query.message.reply_text(f"🎥 انقر هنا لبدء محادثة الفيديو: [اضغط هنا]({video_chat_link})", parse_mode="Markdown")
+    # Check if a user is already waiting
+    if waiting_users:
+        # Pair the two users
+        partner_id = waiting_users.pop(0)
+        jitsi_link = f"https://meet.jit.si/ta7diga-{random.randint(1000, 9999)}"
+
+        # Notify both users
+        await context.bot.send_message(partner_id, f"🎥 تم العثور على شريك! انقر هنا للانضمام: [اضغط هنا]({jitsi_link})", parse_mode="Markdown")
+        await context.bot.send_message(user_id, f"🎥 تم العثور على شريك! انقر هنا للانضمام: [اضغط هنا]({jitsi_link})", parse_mode="Markdown")
+        
+    else:
+        # Add user to queue and tell them to wait
+        waiting_users.append(user_id)
+        await query.answer()
+        await query.message.reply_text("⌛ جاري البحث عن شريك لك... الرجاء الانتظار.")
 
 async def howto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Send instructions."""
@@ -50,10 +66,11 @@ async def howto(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     
     await query.message.reply_text(
         "🛠 **كيفية استخدام البوت**\n"
-        "1. اضغط /connect لبدء البحث عن مستخدم آخر.\n"
-        "2. سيتم إرسال رابط محادثة فيديو عشوائية.\n"
-        "3. انقر على الرابط للانضمام.\n"
-        "4. تأكد من منح إذن للكاميرا والميكروفون."
+        "1. اضغط 'ابدأ محادثة جديدة' للانضمام إلى قائمة الانتظار.\n"
+        "2. سيتم البحث عن مستخدم آخر تلقائيًا.\n"
+        "3. عند العثور على شريك، سيتم إرسال رابط محادثة فيديو.\n"
+        "4. انقر على الرابط للانضمام.\n"
+        "5. تأكد من منح إذن للكاميرا والميكروفون."
     )
 
 async def privacy_policy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
