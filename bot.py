@@ -2,7 +2,6 @@ import random
 import logging
 import asyncio
 import nest_asyncio
-import webbrowser
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, CallbackQuery
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackQueryHandler, MessageHandler, filters
 
@@ -30,7 +29,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [InlineKeyboardButton("ابدأ محادثة جديدة", callback_data="connect")],
         [InlineKeyboardButton("كيفية الاستخدام", callback_data="howto")],
         [InlineKeyboardButton("سياسة الخصوصية", callback_data="privacy")],
-        [InlineKeyboardButton("📧 تواصل معنا", callback_data="contact")],
     ]
     if update.message.from_user.id in ADMINS:
         keyboard.append([InlineKeyboardButton("لوحة الإدارة", callback_data="admin_panel")])
@@ -86,12 +84,11 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await query.edit_message_text(f"📊 المستخدمون المتصلون الآن: {len(waiting_users)}\nاختر خيارًا أدناه:", reply_markup=reply_markup)
 
 async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Open user's email app for contact."""
+    """Provide contact method through Telegram chat."""
     query = update.callback_query
     await query.answer()
-    mailto_link = "mailto:sudanesegayassembly@gmail.com"
-    webbrowser.open(mailto_link)
-    await query.edit_message_text("📧 **تم فتح البريد الإلكتروني للتواصل مع الإدارة**", parse_mode="Markdown")
+    contact_link = "https://t.me/Felba"
+    await query.edit_message_text(f"📧 [تواصل معنا عبر تيليجرام](<{contact_link}>)", parse_mode="Markdown")
 
 async def main():
     """Main function to run the bot."""
