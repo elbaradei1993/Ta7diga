@@ -52,6 +52,7 @@ async def connect(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # If there is already a user in the waiting list, pair them and connect
     if len(waiting_users) >= 1:
         matched_user = waiting_users.pop(0)
+        # Create a unique Jitsi meeting link for both users
         video_chat_link = f"https://meet.jit.si/ta7diga-chat-{random.randint(1000, 9999)}"
 
         # Notify both users about the match
