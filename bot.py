@@ -140,6 +140,21 @@ async def choose_type(update: Update) -> None:
         logger.error(f"Error in choose_type: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save user profile picture."""
+    try:
+        user = update.message.from_user
+        file_id = update.message.photo[-1].file_id
+
+        cursor.execute("UPDATE users SET photo=? WHERE id=?", (file_id, user.id))
+        conn.commit()
+
+        await update.message.reply_text("✅ **تم التسجيل بنجاح! يمكنك الآن البحث عن المستخدمين القريبين.**")
+        await start(update, context)
+    except Exception as e:
+        logger.error(f"Error in handle_photo: {e}")
+        await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
+
 async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Delete user profile."""
     query = update.callback_query
