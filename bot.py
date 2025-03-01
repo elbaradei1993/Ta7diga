@@ -7,7 +7,8 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
-    InputMediaPhoto
+    InputMediaPhoto,
+    Location
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -17,6 +18,7 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
+from geopy.distance import geodesic
 
 # Apply nest_asyncio for event loops
 nest_asyncio.apply()
@@ -32,7 +34,7 @@ BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
 
-# Create user profiles table
+# Create user profiles table with tribes (keeping original field name)
 cursor.execute(
     """CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY,
@@ -43,10 +45,7 @@ cursor.execute(
         type TEXT,
         location TEXT,
         photo TEXT,
-        hiv_status TEXT,
-        last_tested TEXT,
-        relationship_status TEXT,
-        pronouns TEXT
+        tribes TEXT
     )"""
 )
 conn.commit()
@@ -69,7 +68,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         [InlineKeyboardButton("📝 تعديل ملفي", callback_data="edit_profile")],
         [InlineKeyboardButton("📍 تحديث موقعي", callback_data="update_location")],
         [InlineKeyboardButton("⚙ الإعدادات", callback_data="settings")],
-        [InlineKeyboardButton("🌍 استكشاف", callback_data="explore_mode")],
     ]
     
     if user.id in ADMINS:
@@ -87,83 +85,205 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("✍ **أدخل اسمك الكامل:**")
     context.user_data["register_step"] = "name"
 
-async def explore_mode(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Allow users to explore other locations."""
-    query = update.callback_query
-    await query.message.reply_text("📍 **أدخل اسم المدينة التي تريد البحث فيها:**")
-    context.user_data["explore_mode"] = True
-
 async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle registration steps & explore mode."""
+    """Handle registration steps."""
     user = update.message.from_user
     text = update.message.text
+
     step = context.user_data.get("register_step")
-    
-    if context.user_data.get("explore_mode"):
-        await search_in_location(update, context, text)
-        context.user_data["explore_mode"] = False
-        return
-    
+
     if step == "name":
         cursor.execute("UPDATE users SET name=? WHERE id=?", (text, user.id))
         conn.commit()
         await update.message.reply_text("📅 **أدخل عمرك:**")
         context.user_data["register_step"] = "age"
-    
+
     elif step == "age":
         cursor.execute("UPDATE users SET age=? WHERE id=?", (text, user.id))
         conn.commit()
         await update.message.reply_text("📝 **أدخل نبذة عنك:**")
         context.user_data["register_step"] = "bio"
-    
+
     elif step == "bio":
         cursor.execute("UPDATE users SET bio=? WHERE id=?", (text, user.id))
         conn.commit()
-        await update.message.reply_text("🔖 **اختر حالتك العاطفية:** (أعزب، مرتبط، متزوج)")
-        context.user_data["register_step"] = "relationship_status"
-
-    elif step == "relationship_status":
-        cursor.execute("UPDATE users SET relationship_status=? WHERE id=?", (text, user.id))
-        conn.commit()
-        await update.message.reply_text("🏳️‍🌈 **أدخل ضمائرك:** (هو/هي/هم)")
-        context.user_data["register_step"] = "pronouns"
-    
-    elif step == "pronouns":
-        cursor.execute("UPDATE users SET pronouns=? WHERE id=?", (text, user.id))
-        conn.commit()
-        await update.message.reply_text("🩺 **أدخل حالة اختبار HIV الأخيرة:** (سلبي، إيجابي، غير معروف)")
-        context.user_data["register_step"] = "hiv_status"
-    
-    elif step == "hiv_status":
-        cursor.execute("UPDATE users SET hiv_status=? WHERE id=?", (text, user.id))
-        conn.commit()
-        await update.message.reply_text("📆 **متى أجريت آخر اختبار HIV؟** (مثال: يناير 2024)")
-        context.user_data["register_step"] = "last_tested"
-    
-    elif step == "last_tested":
-        cursor.execute("UPDATE users SET last_tested=? WHERE id=?", (text, user.id))
-        conn.commit()
         await choose_type(update)
 
-async def search_in_location(update: Update, context: ContextTypes.DEFAULT_TYPE, location: str) -> None:
-    """Search users in a specific location."""
-    cursor.execute("SELECT id, name, bio, type, photo FROM users WHERE location=?", (location,))
-    users = cursor.fetchall()
-    if not users:
-        await update.message.reply_text("❌ لا يوجد مستخدمون في هذا الموقع.")
-        return
-    keyboard = [[InlineKeyboardButton(user[1], callback_data=f"profile_{user[0]}")] for user in users]
+async def choose_type(update: Update) -> None:
+    """Let users choose their type (تصنيفك)."""
+    keyboard = [
+        [InlineKeyboardButton("🌿 فرع", callback_data="type_branch"),
+         InlineKeyboardButton("🍬 حلوة", callback_data="type_sweet")],
+        [InlineKeyboardButton("🌾 برغل", callback_data="type_burghul"),
+         InlineKeyboardButton("🎭 مارق", callback_data="type_mariq")],
+        [InlineKeyboardButton("🎨 شادي الديكور", callback_data="type_shady"),
+         InlineKeyboardButton("💃 بنوتي", callback_data="type_banoti")],
+        [InlineKeyboardButton("✅ حفظ", callback_data="save_type")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(f"🌍 المستخدمون في {location}:", reply_markup=reply_markup)
+    await update.message.reply_text("🔖 **اختر تصنيفك:** (يمكن اختيار أكثر من واحد)", reply_markup=reply_markup)
 
-# Add other features like Taps, Tribes & Filters, Messaging, etc., as needed.
+async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save user type selections (تصنيفك)."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    selected_type = query.data.replace("type_", "")
+
+    cursor.execute("SELECT tribes FROM users WHERE id=?", (user_id,))
+    tribes = cursor.fetchone()[0] or ""
+
+    if selected_type in tribes:
+        tribes = tribes.replace(selected_type, "")
+    else:
+        tribes += f"{selected_type},"
+        
+    cursor.execute("UPDATE users SET tribes=? WHERE id=?", (tribes, user_id))
+    conn.commit()
+    
+    await query.answer("تم تحديث التصنيف ✅")
+
+async def save_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Finish registration process."""
+    await update.callback_query.message.reply_text("📍 **يرجى مشاركة موقعك الجغرافي:** (استخدم زر المرفقات لإرسال الموقع)")
+    context.user_data["register_step"] = "location"
+
+async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save user location."""
+    user = update.message.from_user
+    location = update.message.location
+    lat_lon = f"{location.latitude},{location.longitude}"
+    
+    cursor.execute("UPDATE users SET location=? WHERE id=?", (lat_lon, user.id))
+    conn.commit()
+    
+    await update.message.reply_text("📸 **أرسل صورتك الشخصية الآن:** (اختياري)")
+    context.user_data["register_step"] = "photo"
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save user profile picture."""
+    user = update.message.from_user
+    file_id = update.message.photo[-1].file_id
+
+    cursor.execute("UPDATE users SET photo=? WHERE id=?", (file_id, user.id))
+    conn.commit()
+
+    await update.message.reply_text("✅ **تم التسجيل بنجاح! يمكنك الآن البحث عن المستخدمين القريبين.**")
+    await start(update, context)
+
+def calculate_distances(user_id):
+    """Calculate distances between current user and others."""
+    cursor.execute("SELECT location FROM users WHERE id=?", (user_id,))
+    current_location = cursor.fetchone()[0]
+    if not current_location:
+        return []
+    
+    current_lat, current_lon = map(float, current_location.split(','))
+    
+    cursor.execute("SELECT id, name, location, tribes FROM users WHERE id!=?", (user_id,))
+    users = []
+    for user in cursor.fetchall():
+        if user[2]:
+            lat, lon = map(float, user[2].split(','))
+            distance = geodesic((current_lat, current_lon), (lat, lon)).km
+            users.append((user[0], user[1], distance, user[3]))
+    
+    # Sort by distance and tribe matches
+    cursor.execute("SELECT tribes FROM users WHERE id=?", (user_id,))
+    user_tribes = cursor.fetchone()[0] or ""
+    sorted_users = sorted(users, key=lambda x: (x[2], -len(set(user_tribes.split(',')) & set(x[3].split(','))))
+    
+    return sorted_users
+
+async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Find nearby users with تصنيفك prioritization."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    nearby_users = calculate_distances(user_id)
+    if not nearby_users:
+        await query.answer("❌ لا يوجد مستخدمون بالقرب منك حاليًا.")
+        return
+
+    keyboard = [[InlineKeyboardButton(f"{user[1]} ({round(user[2],1)}km)", callback_data=f"profile_{user[0]}")] for user in nearby_users]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.message.reply_text("🔍 **المستخدمون القريبون:**", reply_markup=reply_markup)
+
+async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Display selected user profile with interaction options."""
+    query = update.callback_query
+    user_id = int(query.data.split("_")[1])
+    current_user = query.from_user.id
+
+    cursor.execute("SELECT name, bio, age, tribes, photo FROM users WHERE id=?", (user_id,))
+    user = cursor.fetchone()
+
+    profile_text = (
+        f"👤 الاسم: {user[0]}\n"
+        f"📌 العمر: {user[2]}\n"
+        f"📝 النبذة: {user[1]}\n"
+        f"🌍 تصنيفك: {user[3]}"
+    )
+    
+    # Interaction buttons
+    buttons = [
+        [InlineKeyboardButton("💬 محادثة", callback_data=f"chat_{user_id}")],
+        [InlineKeyboardButton("👋 تاپ", callback_data=f"tap_{user_id}")]
+    ]
+    
+    if cursor.execute("SELECT username FROM users WHERE id=?", (user_id,)).fetchone()[0]:
+        buttons[0].append(InlineKeyboardButton("📲 دردشة مباشرة", url=f"https://t.me/{cursor.execute('SELECT username FROM users WHERE id=?', (user_id,)).fetchone()[0]}"))
+    
+    reply_markup = InlineKeyboardMarkup(buttons)
+
+    await context.bot.send_photo(
+        chat_id=query.message.chat_id,
+        photo=user[4],
+        caption=profile_text,
+        reply_markup=reply_markup
+    )
+
+async def handle_tap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle tapping mechanism with notifications."""
+    query = update.callback_query
+    tapped_user_id = int(query.data.split("_")[1])
+    tapper_id = query.from_user.id
+
+    # Get tapper's info
+    cursor.execute("SELECT name, username FROM users WHERE id=?", (tapper_id,))
+    tapper = cursor.fetchone()
+
+    # Send notification to tapped user
+    notification_text = f"👋 لديك تاپ جديد من {tapper[0]}!"
+    keyboard = [
+        [InlineKeyboardButton("💬 رد", callback_data=f"chat_{tapper_id}"),
+         InlineKeyboardButton("👋 تاپ بالعكس", callback_data=f"tap_{tapper_id}")]
+    ]
+    if tapper[1]:
+        keyboard[0].append(InlineKeyboardButton("📲 دردشة", url=f"https://t.me/{tapper[1]}"))
+    
+    try:
+        await context.bot.send_message(
+            chat_id=tapped_user_id,
+            text=notification_text,
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        await query.answer("✅ تم إرسال التاپ!")
+    except Exception as e:
+        await query.answer("❌ تعذر إرسال التاپ. قد يكون المستخدم حظر البوت.")
 
 async def main():
-    """Start bot."""
+    """Start bot with updated handlers."""
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(explore_mode, pattern="^explore_mode$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.LOCATION, handle_location))
+    app.add_handler(CallbackQueryHandler(search, pattern="^search$"))
+    app.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))
+    app.add_handler(CallbackQueryHandler(handle_tap, pattern="^tap_"))
+    app.add_handler(CallbackQueryHandler(select_type, pattern="^type_"))
+    app.add_handler(CallbackQueryHandler(save_type, pattern="^save_type$"))
     await app.run_polling()
 
 if __name__ == "__main__":
