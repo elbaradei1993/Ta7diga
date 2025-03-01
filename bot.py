@@ -73,7 +73,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             [InlineKeyboardButton("📝 تعديل ملفي", callback_data="edit_profile"),
              InlineKeyboardButton("📍 تحديث موقعي", callback_data="update_location")],
             [InlineKeyboardButton("🗑️ حذف الملف الشخصي", callback_data="delete_profile"),
-             InlineKeyboardButton("⚙ الإعدادات", callback_data="settings")]
+             InlineKeyboardButton("⚙ الإعدادات", callback_data="settings")],
+            [InlineKeyboardButton("🔙 الرجوع", callback_data="go_back")]
         ]
         
         if user.id in ADMINS:
@@ -132,7 +133,8 @@ async def choose_type(update: Update) -> None:
              InlineKeyboardButton("🎭 مارق", callback_data="type_mariq")],
             [InlineKeyboardButton("🎨 شادي الديكور", callback_data="type_shady"),
              InlineKeyboardButton("💃 بنوتي", callback_data="type_banoti")],
-            [InlineKeyboardButton("✅ حفظ", callback_data="save_type")]
+            [InlineKeyboardButton("✅ حفظ", callback_data="save_type")],
+            [InlineKeyboardButton("🔙 الرجوع", callback_data="go_back")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("🔖 **اختر تصنيفك:** (يمكن اختيار أكثر من واحد)", reply_markup=reply_markup)
@@ -155,6 +157,18 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Error in handle_photo: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
+async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle user location updates."""
+    try:
+        user = update.message.from_user
+        location = update.message.location
+        cursor.execute("UPDATE users SET location=? WHERE id=?", (f"{location.latitude},{location.longitude}", user.id))
+        conn.commit()
+        await update.message.reply_text("📍 **تم تحديث موقعك بنجاح!**")
+    except Exception as e:
+        logger.error(f"Error in handle_location: {e}")
+        await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
+
 async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Delete user profile."""
     query = update.callback_query
@@ -170,6 +184,12 @@ async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as e:
         logger.error(f"Error deleting profile: {e}")
         await query.message.reply_text("❌ فشل في حذف الملف الشخصي. يرجى المحاولة مرة أخرى.")
+
+async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle go back action."""
+    query = update.callback_query
+    await query.answer()
+    await start(update, context)
 
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log errors."""
@@ -198,6 +218,7 @@ async def main():
         app.add_handler(CallbackQueryHandler(save_type, pattern="^save_type$"))
         app.add_handler(CallbackQueryHandler(skip_photo, pattern="^skip_photo$"))
         app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
+        app.add_handler(CallbackQueryHandler(go_back, pattern="^go_back$"))
         
         # Stop any existing webhook
         await app.bot.delete_webhook()
