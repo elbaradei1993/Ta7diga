@@ -3,6 +3,7 @@ import logging
 import asyncio
 import nest_asyncio
 import sqlite3
+import math
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -18,7 +19,6 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
-from geopy.distance import geodesic
 
 # Apply nest_asyncio for event loops
 nest_asyncio.apply()
@@ -65,6 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     keyboard = [
         [InlineKeyboardButton("🔍 حدّق", callback_data="search")],
+        [InlineKeyboardButton("👥 عرض المستخدمين", callback_data="show_users")],
         [InlineKeyboardButton("📝 تعديل ملفي", callback_data="edit_profile")],
         [InlineKeyboardButton("📍 تحديث موقعي", callback_data="update_location")],
         [InlineKeyboardButton("⚙ الإعدادات", callback_data="settings")],
@@ -156,7 +157,11 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     cursor.execute("UPDATE users SET location=? WHERE id=?", (lat_lon, user.id))
     conn.commit()
     
-    await update.message.reply_text("📸 **أرسل صورتك الشخصية الآن:** (اختياري)")
+    keyboard = [
+        [InlineKeyboardButton("⏩ تخطي", callback_data="skip_photo")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("📸 **أرسل صورتك الشخصية الآن:** (اختياري)", reply_markup=reply_markup)
     context.user_data["register_step"] = "photo"
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -170,8 +175,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.message.reply_text("✅ **تم التسجيل بنجاح! يمكنك الآن البحث عن المستخدمين القريبين.**")
     await start(update, context)
 
+async def skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle skipping profile photo."""
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    cursor.execute("UPDATE users SET photo=? WHERE id=?", ("", user_id))
+    conn.commit()
+
+    await query.answer("تم تخطي إضافة الصورة.")
+    await query.message.reply_text("✅ **تم التسجيل بنجاح! يمكنك الآن البحث عن المستخدمين القريبين.**")
+    await start(update, context)
+
 def calculate_distances(user_id):
-    """Calculate distances between current user and others."""
+    """Calculate distances between current user and others (without geopy)."""
     cursor.execute("SELECT location FROM users WHERE id=?", (user_id,))
     current_location = cursor.fetchone()[0]
     if not current_location:
@@ -184,7 +201,8 @@ def calculate_distances(user_id):
     for user in cursor.fetchall():
         if user[2]:
             lat, lon = map(float, user[2].split(','))
-            distance = geodesic((current_lat, current_lon), (lat, lon)).km
+            # Simple distance calculation (approximation)
+            distance = math.sqrt((current_lat - lat) ** 2 + (current_lon - lon) ** 2)
             users.append((user[0], user[1], distance, user[3]))
     
     # Sort by distance and tribe matches
@@ -214,6 +232,23 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await query.message.reply_text("🔍 **المستخدمون القريبون:**", reply_markup=reply_markup)
+
+async def show_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show available users."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    
+    cursor.execute("SELECT id, name FROM users WHERE id!=?", (user_id,))
+    users = cursor.fetchall()
+
+    if not users:
+        await query.answer("❌ لا يوجد مستخدمون متاحون حاليًا.")
+        return
+
+    keyboard = [[InlineKeyboardButton(user[1], callback_data=f"profile_{user[0]}")] for user in users]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.message.reply_text("👥 **المستخدمون المتاحون:**", reply_markup=reply_markup)
 
 async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Display selected user profile with interaction options."""
@@ -286,10 +321,12 @@ async def main():
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
     app.add_handler(CallbackQueryHandler(search, pattern="^search$"))
+    app.add_handler(CallbackQueryHandler(show_users, pattern="^show_users$"))
     app.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))
     app.add_handler(CallbackQueryHandler(handle_tap, pattern="^tap_"))
     app.add_handler(CallbackQueryHandler(select_type, pattern="^type_"))
     app.add_handler(CallbackQueryHandler(save_type, pattern="^save_type$"))
+    app.add_handler(CallbackQueryHandler(skip_photo, pattern="^skip_photo$"))
     await app.run_polling()
 
 if __name__ == "__main__":
