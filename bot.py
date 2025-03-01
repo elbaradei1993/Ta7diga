@@ -85,6 +85,61 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Error in start: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
+async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Guide user through registration."""
+    user = update.message.from_user
+    cursor.execute("INSERT OR IGNORE INTO users (id, username) VALUES (?, ?)", (user.id, user.username))
+    conn.commit()
+    
+    await update.message.reply_text("✍ **أدخل اسمك الكامل:**")
+    context.user_data["register_step"] = "name"
+
+async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle registration steps."""
+    try:
+        user = update.message.from_user
+        text = update.message.text
+
+        step = context.user_data.get("register_step")
+
+        if step == "name":
+            cursor.execute("UPDATE users SET name=? WHERE id=?", (text, user.id))
+            conn.commit()
+            await update.message.reply_text("📅 **أدخل عمرك:**")
+            context.user_data["register_step"] = "age"
+
+        elif step == "age":
+            cursor.execute("UPDATE users SET age=? WHERE id=?", (text, user.id))
+            conn.commit()
+            await update.message.reply_text("📝 **أدخل نبذة عنك:**")
+            context.user_data["register_step"] = "bio"
+
+        elif step == "bio":
+            cursor.execute("UPDATE users SET bio=? WHERE id=?", (text, user.id))
+            conn.commit()
+            await choose_type(update)
+    except Exception as e:
+        logger.error(f"Error in handle_messages: {e}")
+        await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
+
+async def choose_type(update: Update) -> None:
+    """Let users choose their type (تصنيفك)."""
+    try:
+        keyboard = [
+            [InlineKeyboardButton("🌿 فرع", callback_data="type_branch"),
+             InlineKeyboardButton("🍬 حلوة", callback_data="type_sweet")],
+            [InlineKeyboardButton("🌾 برغل", callback_data="type_burghul"),
+             InlineKeyboardButton("🎭 مارق", callback_data="type_mariq")],
+            [InlineKeyboardButton("🎨 شادي الديكور", callback_data="type_shady"),
+             InlineKeyboardButton("💃 بنوتي", callback_data="type_banoti")],
+            [InlineKeyboardButton("✅ حفظ", callback_data="save_type")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text("🔖 **اختر تصنيفك:** (يمكن اختيار أكثر من واحد)", reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Error in choose_type: {e}")
+        await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
+
 async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Delete user profile."""
     query = update.callback_query
@@ -107,34 +162,35 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if update and update.message:
         await update.message.reply_text("❌ حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.")
 
-# ... [Keep all other functions the same as previous version, just add this new handler]
-
 async def main():
     """Start bot with updated handlers."""
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    
-    # Add error handler
-    app.add_error_handler(error_handler)
-    
-    # Add handlers
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(MessageHandler(filters.LOCATION, handle_location))
-    app.add_handler(CallbackQueryHandler(search, pattern="^search$"))
-    app.add_handler(CallbackQueryHandler(show_users, pattern="^show_users$"))
-    app.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))
-    app.add_handler(CallbackQueryHandler(handle_tap, pattern="^tap_"))
-    app.add_handler(CallbackQueryHandler(select_type, pattern="^type_"))
-    app.add_handler(CallbackQueryHandler(save_type, pattern="^save_type$"))
-    app.add_handler(CallbackQueryHandler(skip_photo, pattern="^skip_photo$"))
-    app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
-    
-    # Stop any existing webhook
-    await app.bot.delete_webhook()
-    
-    # Start polling
-    await app.run_polling()
+    try:
+        app = ApplicationBuilder().token(BOT_TOKEN).build()
+        
+        # Add error handler
+        app.add_error_handler(error_handler)
+        
+        # Add handlers
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
+        app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        app.add_handler(MessageHandler(filters.LOCATION, handle_location))
+        app.add_handler(CallbackQueryHandler(search, pattern="^search$"))
+        app.add_handler(CallbackQueryHandler(show_users, pattern="^show_users$"))
+        app.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))
+        app.add_handler(CallbackQueryHandler(handle_tap, pattern="^tap_"))
+        app.add_handler(CallbackQueryHandler(select_type, pattern="^type_"))
+        app.add_handler(CallbackQueryHandler(save_type, pattern="^save_type$"))
+        app.add_handler(CallbackQueryHandler(skip_photo, pattern="^skip_photo$"))
+        app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
+        
+        # Stop any existing webhook
+        await app.bot.delete_webhook()
+        
+        # Start polling
+        await app.run_polling()
+    except Exception as e:
+        logger.error(f"Error in main: {e}")
 
 if __name__ == "__main__":
     asyncio.run(main())
