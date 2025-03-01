@@ -114,8 +114,18 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             context.user_data["register_step"] = "age"
 
         elif step == "age":
+            # Validate age input
+            try:
+                age = int(text)
+                if age < 1 or age > 120:
+                    await update.message.reply_text("❌ العمر غير صالح. يرجى إدخال عمر بين 1 و 120.")
+                    return
+            except ValueError:
+                await update.message.reply_text("❌ العمر غير صالح. يرجى إدخال رقم.")
+                return
+
             async with aiosqlite.connect(DATABASE) as db:
-                await db.execute("UPDATE users SET age=? WHERE id=?", (text, user.id))
+                await db.execute("UPDATE users SET age=? WHERE id=?", (age, user.id))
                 await db.commit()
             await update.message.reply_text("📝 **أدخل نبذة عنك:**")
             context.user_data["register_step"] = "bio"
@@ -125,6 +135,8 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 await db.execute("UPDATE users SET bio=? WHERE id=?", (text, user.id))
                 await db.commit()
             await choose_type(update)
+            context.user_data["register_step"] = None  # Clear the step after completion
+
     except Exception as e:
         logger.error(f"Error in handle_messages: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
@@ -198,61 +210,66 @@ async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"Error deleting profile: {e}")
         await query.message.reply_text("❌ فشل في حذف الملف الشخصي. يرجى المحاولة مرة أخرى.")
 
-# Go back
-async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle go back action."""
-    query = update.callback_query
-    await query.answer()
-    await start(update, context)
-
-# Search functionality
-async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle search functionality."""
-    query = update.callback_query
-    await query.answer()
-    await query.message.reply_text("🔍 **جاري البحث عن مستخدمين قريبين...**")
-
 # Show users functionality
 async def show_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show users functionality."""
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text("👥 **عرض قائمة المستخدمين...**")
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT id, name, age, bio FROM users")
+            users = await cursor.fetchall()
+
+        if not users:
+            await query.message.reply_text("❌ لا يوجد مستخدمين متاحين.")
+            return
+
+        keyboard = []
+        for user in users:
+            user_id, name, age, bio = user
+            button_text = f"{name} ({age})"
+            keyboard.append([InlineKeyboardButton(button_text, callback_data=f"view_profile_{user_id}")])
+
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await query.message.reply_text("👥 **قائمة المستخدمين:**", reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Error in show_users: {e}")
+        await query.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
 # View profile functionality
 async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """View profile functionality."""
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text("👤 **عرض الملف الشخصي...**")
 
-# Handle tap functionality
-async def handle_tap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle tap functionality."""
+    try:
+        user_id = int(query.data.split("_")[-1])  # Extract user ID from callback data
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT name, age, bio, photo FROM users WHERE id=?", (user_id,))
+            user = await cursor.fetchone()
+
+        if not user:
+            await query.message.reply_text("❌ المستخدم غير موجود.")
+            return
+
+        name, age, bio, photo = user
+        profile_text = f"👤 **الاسم:** {name}\n📅 **العمر:** {age}\n📝 **نبذة:** {bio}"
+        
+        if photo:
+            await query.message.reply_photo(photo, caption=profile_text)
+        else:
+            await query.message.reply_text(profile_text)
+    except Exception as e:
+        logger.error(f"Error in view_profile: {e}")
+        await query.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
+
+# Go back
+async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle go back action."""
     query = update.callback_query
     await query.answer()
-    await query.message.reply_text("👆 **تم النقر!**")
-
-# Select type functionality
-async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle type selection."""
-    query = update.callback_query
-    await query.answer()
-    await query.message.reply_text("🔖 **تم اختيار التصنيف!**")
-
-# Save type functionality
-async def save_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Save selected type."""
-    query = update.callback_query
-    await query.answer()
-    await query.message.reply_text("✅ **تم حفظ التصنيف!**")
-
-# Skip photo functionality
-async def skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Skip photo upload."""
-    query = update.callback_query
-    await query.answer()
-    await query.message.reply_text("⏭️ **تم تخطي تحميل الصورة.**")
+    await start(update, context)
 
 # Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -276,13 +293,8 @@ async def main():
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         app.add_handler(MessageHandler(filters.LOCATION, handle_location))
-        app.add_handler(CallbackQueryHandler(search, pattern="^search$"))
         app.add_handler(CallbackQueryHandler(show_users, pattern="^show_users$"))
-        app.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))
-        app.add_handler(CallbackQueryHandler(handle_tap, pattern="^tap_"))
-        app.add_handler(CallbackQueryHandler(select_type, pattern="^type_"))
-        app.add_handler(CallbackQueryHandler(save_type, pattern="^save_type$"))
-        app.add_handler(CallbackQueryHandler(skip_photo, pattern="^skip_photo$"))
+        app.add_handler(CallbackQueryHandler(view_profile, pattern="^view_profile_"))
         app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
         app.add_handler(CallbackQueryHandler(go_back, pattern="^go_back$"))
         
