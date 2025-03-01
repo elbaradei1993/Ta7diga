@@ -1,15 +1,11 @@
-import random
 import logging
 import asyncio
 import nest_asyncio
-import sqlite3
-import math
+import aiosqlite  # Asynchronous SQLite library
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
-    InputMediaPhoto,
-    Location
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -34,67 +30,37 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 
 # Database connection
-conn = sqlite3.connect("users.db", check_same_thread=False)
-cursor = conn.cursor()
+DATABASE = "users.db"
 
-# Create user profiles table
-cursor.execute(
-    """CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY,
-        username TEXT,
-        name TEXT,
-        age INTEGER,
-        bio TEXT,
-        type TEXT,
-        location TEXT,
-        photo TEXT,
-        tribes TEXT
-    )"""
-)
-conn.commit()
+# Admin IDs
+ADMINS = [1796978458]
 
-ADMINS = [1796978458]  # Admin IDs
+# Initialize database
+async def init_db():
+    async with aiosqlite.connect(DATABASE) as db:
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT,
+                name TEXT,
+                age INTEGER,
+                bio TEXT,
+                type TEXT,
+                location TEXT,
+                photo TEXT,
+                tribes TEXT
+            )"""
+        )
+        await db.commit()
 
-# Placeholder for unimplemented functions
-async def placeholder_function(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Placeholder for unimplemented functions."""
-    await update.message.reply_text("🚧 **هذه الميزة قيد التطوير. يرجى المحاولة لاحقًا.**")
-
-# Define all referenced functions
-async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle search functionality."""
-    await placeholder_function(update, context)
-
-async def show_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Show users functionality."""
-    await placeholder_function(update, context)
-
-async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """View profile functionality."""
-    await placeholder_function(update, context)
-
-async def handle_tap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle tap functionality."""
-    await placeholder_function(update, context)
-
-async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle type selection."""
-    await placeholder_function(update, context)
-
-async def save_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Save selected type."""
-    await placeholder_function(update, context)
-
-async def skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Skip photo upload."""
-    await placeholder_function(update, context)
-
+# Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /start command & enforce registration."""
     try:
         user = update.message.from_user
-        cursor.execute("SELECT * FROM users WHERE id=?", (user.id,))
-        result = cursor.fetchone()
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
+            result = await cursor.fetchone()
 
         if not result:
             await update.message.reply_text("🔹 **يجب التسجيل أولًا لاستخدام البوت.**")
@@ -120,15 +86,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Error in start: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
+# Registration
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Guide user through registration."""
     user = update.message.from_user
-    cursor.execute("INSERT OR IGNORE INTO users (id, username) VALUES (?, ?)", (user.id, user.username))
-    conn.commit()
+    async with aiosqlite.connect(DATABASE) as db:
+        await db.execute("INSERT OR IGNORE INTO users (id, username) VALUES (?, ?)", (user.id, user.username))
+        await db.commit()
     
     await update.message.reply_text("✍ **أدخل اسمك الكامل:**")
     context.user_data["register_step"] = "name"
 
+# Handle messages during registration
 async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle registration steps."""
     try:
@@ -138,25 +107,29 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         step = context.user_data.get("register_step")
 
         if step == "name":
-            cursor.execute("UPDATE users SET name=? WHERE id=?", (text, user.id))
-            conn.commit()
+            async with aiosqlite.connect(DATABASE) as db:
+                await db.execute("UPDATE users SET name=? WHERE id=?", (text, user.id))
+                await db.commit()
             await update.message.reply_text("📅 **أدخل عمرك:**")
             context.user_data["register_step"] = "age"
 
         elif step == "age":
-            cursor.execute("UPDATE users SET age=? WHERE id=?", (text, user.id))
-            conn.commit()
+            async with aiosqlite.connect(DATABASE) as db:
+                await db.execute("UPDATE users SET age=? WHERE id=?", (text, user.id))
+                await db.commit()
             await update.message.reply_text("📝 **أدخل نبذة عنك:**")
             context.user_data["register_step"] = "bio"
 
         elif step == "bio":
-            cursor.execute("UPDATE users SET bio=? WHERE id=?", (text, user.id))
-            conn.commit()
+            async with aiosqlite.connect(DATABASE) as db:
+                await db.execute("UPDATE users SET bio=? WHERE id=?", (text, user.id))
+                await db.commit()
             await choose_type(update)
     except Exception as e:
         logger.error(f"Error in handle_messages: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
+# Choose type
 async def choose_type(update: Update) -> None:
     """Let users choose their type (تصنيفك)."""
     try:
@@ -176,14 +149,16 @@ async def choose_type(update: Update) -> None:
         logger.error(f"Error in choose_type: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
+# Handle photo
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Save user profile picture."""
     try:
         user = update.message.from_user
         file_id = update.message.photo[-1].file_id
 
-        cursor.execute("UPDATE users SET photo=? WHERE id=?", (file_id, user.id))
-        conn.commit()
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET photo=? WHERE id=?", (file_id, user.id))
+            await db.commit()
 
         await update.message.reply_text("✅ **تم التسجيل بنجاح! يمكنك الآن البحث عن المستخدمين القريبين.**")
         await start(update, context)
@@ -191,18 +166,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Error in handle_photo: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
+# Handle location
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle user location updates."""
     try:
         user = update.message.from_user
         location = update.message.location
-        cursor.execute("UPDATE users SET location=? WHERE id=?", (f"{location.latitude},{location.longitude}", user.id))
-        conn.commit()
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET location=? WHERE id=?", (f"{location.latitude},{location.longitude}", user.id))
+            await db.commit()
         await update.message.reply_text("📍 **تم تحديث موقعك بنجاح!**")
     except Exception as e:
         logger.error(f"Error in handle_location: {e}")
         await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
 
+# Delete profile
 async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Delete user profile."""
     query = update.callback_query
@@ -210,8 +188,9 @@ async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     
     try:
         user_id = query.from_user.id
-        cursor.execute("DELETE FROM users WHERE id=?", (user_id,))
-        conn.commit()
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("DELETE FROM users WHERE id=?", (user_id,))
+            await db.commit()
         
         await query.message.reply_text("✅ تم حذف ملفك الشخصي بنجاح.")
         await register(update, context)
@@ -219,21 +198,25 @@ async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         logger.error(f"Error deleting profile: {e}")
         await query.message.reply_text("❌ فشل في حذف الملف الشخصي. يرجى المحاولة مرة أخرى.")
 
+# Go back
 async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle go back action."""
     query = update.callback_query
     await query.answer()
     await start(update, context)
 
+# Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log errors."""
     logger.error(msg="Exception while handling update:", exc_info=context.error)
     if update and update.message:
         await update.message.reply_text("❌ حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.")
 
+# Main function
 async def main():
     """Start bot with updated handlers."""
     try:
+        await init_db()  # Initialize database
         app = ApplicationBuilder().token(BOT_TOKEN).build()
         
         # Add error handler
