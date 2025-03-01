@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import nest_asyncio
-import aiosqlite  # Asynchronous SQLite library
+import aiosqlite
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -204,6 +204,55 @@ async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     await start(update, context)
+
+# Search functionality
+async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle search functionality."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("🔍 **جاري البحث عن مستخدمين قريبين...**")
+
+# Show users functionality
+async def show_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show users functionality."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("👥 **عرض قائمة المستخدمين...**")
+
+# View profile functionality
+async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """View profile functionality."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("👤 **عرض الملف الشخصي...**")
+
+# Handle tap functionality
+async def handle_tap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle tap functionality."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("👆 **تم النقر!**")
+
+# Select type functionality
+async def select_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle type selection."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("🔖 **تم اختيار التصنيف!**")
+
+# Save type functionality
+async def save_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Save selected type."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("✅ **تم حفظ التصنيف!**")
+
+# Skip photo functionality
+async def skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Skip photo upload."""
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text("⏭️ **تم تخطي تحميل الصورة.**")
 
 # Error handler
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
