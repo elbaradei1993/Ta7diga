@@ -308,7 +308,6 @@ async def handle_tap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             chat_id=tapped_user_id,
             text=notification_text,
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
         await query.answer("✅ تم إرسال التاپ!")
     except Exception as e:
         await query.answer("❌ تعذر إرسال التاپ. قد يكون المستخدم حظر البوت.")
