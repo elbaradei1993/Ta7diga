@@ -190,7 +190,13 @@ def calculate_distances(user_id):
     # Sort by distance and tribe matches
     cursor.execute("SELECT tribes FROM users WHERE id=?", (user_id,))
     user_tribes = cursor.fetchone()[0] or ""
-    sorted_users = sorted(users, key=lambda x: (x[2], -len(set(user_tribes.split(',')) & set(x[3].split(','))))
+    sorted_users = sorted(
+        users, 
+        key=lambda x: (
+            x[2],  # Sort by distance
+            -len(set(user_tribes.split(',')) & set(x[3].split(',')))  # Sort by shared tribes (descending)
+        )
+    )
     
     return sorted_users
 
@@ -267,7 +273,6 @@ async def handle_tap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
             chat_id=tapped_user_id,
             text=notification_text,
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
         await query.answer("✅ تم إرسال التاپ!")
     except Exception as e:
         await query.answer("❌ تعذر إرسال التاپ. قد يكون المستخدم حظر البوت.")
