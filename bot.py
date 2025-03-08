@@ -507,6 +507,64 @@ async def show_user_profile(query: Update, user_id: int):
         logger.error(f"Profile show error: {e}")
         await query.message.reply_text("❌ حدث خطأ في عرض الملف الشخصي")
 
+# Handle button clicks
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update_user_activity(update.callback_query.from_user.id)  # Update activity
+    try:
+        query = update.callback_query
+        await query.answer()
+
+        if query.data == "help_command":
+            await help_command(query.message, context)
+        elif query.data == "delete_account":
+            await delete_account(query.message, context)
+        elif query.data == "edit_profile":
+            await edit_profile(query.message, context)
+        elif query.data == "report_user":
+            await report_user(query.message, context)
+        elif query.data == "feedback":
+            await feedback(query.message, context)
+        elif query.data == "share_location":
+            await show_main_menu(query.message)
+        elif query.data.startswith("type_"):  # Handle type selection
+            selected_type = query.data.split("_")[1]  # Extract the selected type
+            user = query.from_user
+            user_data = context.user_data
+
+            # Save the selected type to the database
+            async with aiosqlite.connect(DATABASE) as db:
+                await db.execute("""INSERT OR REPLACE INTO users 
+                                  (id, username, name, age, bio, type) 
+                                  VALUES (?, ?, ?, ?, ?, ?)""",
+                                  (user.id,
+                                   user.username,
+                                   user_data.get("name"),
+                                   user_data.get("age"),
+                                   user_data.get("bio"),
+                                   selected_type))
+                await db.commit()
+
+            # Clear the registration data from context
+            context.user_data.clear()
+
+            # Prompt the user to upload a photo or skip
+            await query.message.reply_text(PHOTO_PROMPT, 
+                                         reply_markup=InlineKeyboardMarkup(SKIP_PHOTO_BUTTON))
+            context.user_data["registration_stage"] = "photo"  # Move to the photo stage
+
+        elif query.data == "skip_photo":
+            await query.message.reply_text("✅ يمكنك الآن مشاركة موقعك!")
+            await show_main_menu(query.message)
+            context.user_data.clear()
+
+        elif query.data.startswith("view_"):
+            user_id = int(query.data.split("_")[1])
+            await show_user_profile(query, user_id)
+
+    except Exception as e:
+        logger.error(f"Button handling error: {e}")
+        await query.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
 # Main function
 async def main():
     await init_db()
