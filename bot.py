@@ -44,7 +44,6 @@ class UserStates:
     REPORT_USER = 6
     FEEDBACK = 7
 
-# Database operations
 async def init_db():
     try:
         async with aiosqlite.connect(DATABASE) as db:
@@ -116,7 +115,6 @@ async def is_user_online(user_id: int) -> bool:
         logger.error(f"Online check failed: {e}")
         return False
 
-# Command handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -147,7 +145,6 @@ async def start_registration(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Registration start error: {e}")
         await update.message.reply_text("❌ فشل في بدء التسجيل")
 
-# Registration workflow
 async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -178,11 +175,14 @@ async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
             keyboard = [
                 [InlineKeyboardButton("موجب", callback_data="type_موجب")],
                 [InlineKeyboardButton("سالب", callback_data="type_سالب")],
-                [InlineKeyboardButton("مبادل", callback_data="type_مبادل")]
+                [InlineKeyboardButton("مبادل", callback_data="type_مبادل")],
             ]
+            
             await update.message.reply_text(
                 "اختر تصنيفك:",
                 reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            
             context.user_data["state"] = UserStates.REG_TYPE
 
     except Exception as e:
@@ -201,6 +201,7 @@ async def handle_type_selection(update: Update, context: ContextTypes.DEFAULT_TY
             "📸 يرجى إرسال صورة شخصية (اختياري):\n"
             "يمكنك تخطي هذه الخطوة بالضغط على الزر أدناه",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("تخطي الصورة", callback_data="skip_photo")]])
+        )
         context.user_data["state"] = UserStates.REG_PHOTO
         
     except Exception as e:
@@ -235,6 +236,7 @@ async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TY
             VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (user.id, user.username, data["name"], data["age"], 
              data["bio"], data["type"], data.get("photo"))
+        )
         
         await update.message.reply_text("✅ تم التسجيل بنجاح!")
         await show_main_menu(update, context)
@@ -244,7 +246,6 @@ async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TY
         logger.error(f"Registration completion error: {e}")
         await update.message.reply_text("❌ فشل في إكمال التسجيل")
 
-# Main menu and navigation
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         keyboard = [
@@ -257,6 +258,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "القائمة الرئيسية:",
             reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         
         await request_location(update, context)
         
@@ -274,7 +276,6 @@ async def request_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Location request error: {e}")
 
-# Location handling
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         location = update.message.location
@@ -297,7 +298,6 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Location handling error: {e}")
         await update.message.reply_text("❌ خطأ في الموقع")
 
-# Nearby users functionality
 async def show_nearby_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -350,7 +350,6 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
          math.sin(dlon/2) * math.sin(dlon/2))
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
-# Profile viewing
 async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         query = update.callback_query
@@ -390,21 +389,14 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Profile view error: {e}")
         await query.edit_message_text("❌ خطأ في عرض الملف")
 
-# Main application
 async def main():
     try:
         await init_db()
         app = ApplicationBuilder().token(BOT_TOKEN).build()
         
-        # Command handlers
         app.add_handler(CommandHandler("start", start))
-        
-        # Callback handlers
         app.add_handler(CallbackQueryHandler(view_profile, pattern=r"^view_\d+$"))
         app.add_handler(CallbackQueryHandler(handle_type_selection, pattern=r"^type_"))
-        app.add_handler(CallbackQueryHandler(handle_button))
-        
-        # Message handlers
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_registration))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         app.add_handler(MessageHandler(filters.LOCATION, handle_location))
