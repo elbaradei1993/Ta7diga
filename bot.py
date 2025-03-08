@@ -23,17 +23,27 @@ from telegram.ext import (
 
 # Configure environment
 nest_asyncio.apply()
+
+# Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG
+    level=logging.INFO,
+    handlers=[
+        logging.FileHandler('bot.log'),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger(__name__)
+logging.getLogger('httpcore').setLevel(logging.WARNING)
+logging.getLogger('httpx').setLevel(logging.WARNING)
 
 # Constants
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 DATABASE = "users.db"
 ADMIN_ID = 1796978458
 MAX_PHOTO_SIZE = 5_000_000  # 5MB
+DATABASE_TIMEOUT = 30  # seconds
+OPERATION_TIMEOUT = 15  # seconds
 
 class UserStates:
     REG_NAME = 1
@@ -44,9 +54,13 @@ class UserStates:
     REPORT_USER = 6
     FEEDBACK = 7
 
+# Database connection pool
+async def get_db_connection():
+    return await aiosqlite.connect(DATABASE, timeout=DATABASE_TIMEOUT)
+
 async def init_db():
     try:
-        async with aiosqlite.connect(DATABASE) as db:
+        async with await get_db_connection() as db:
             await db.execute("PRAGMA foreign_keys = ON")
             await db.execute("""CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY,
@@ -76,30 +90,33 @@ async def init_db():
             await db.commit()
         logger.info("Database initialized successfully")
     except Exception as e:
-        logger.critical(f"Database initialization failed: {e}")
+        logger.critical(f"Database initialization failed: {e}", exc_info=True)
         raise
 
 async def db_execute(query: str, params: tuple = ()):
     try:
-        async with aiosqlite.connect(DATABASE) as db:
+        async with await get_db_connection() as db:
             await db.execute(query, params)
             await db.commit()
     except Exception as e:
-        logger.error(f"Database error: {e}")
+        logger.error(f"Database error: {e}", exc_info=True)
         raise
 
 async def update_user_activity(user_id: int):
     try:
-        await db_execute(
-            "UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?",
-            (user_id,)
+        await asyncio.wait_for(
+            db_execute(
+                "UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?",
+                (user_id,)
+            ),
+            timeout=OPERATION_TIMEOUT
         )
     except Exception as e:
-        logger.error(f"Activity update failed: {e}")
+        logger.error(f"Activity update failed: {e}", exc_info=True)
 
 async def is_user_online(user_id: int) -> bool:
     try:
-        async with aiosqlite.connect(DATABASE) as db:
+        async with await get_db_connection() as db:
             cursor = await db.execute(
                 "SELECT last_active FROM users WHERE id = ?",
                 (user_id,)
@@ -112,16 +129,21 @@ async def is_user_online(user_id: int) -> bool:
         last_active = datetime.strptime(result[0], "%Y-%m-%d %H:%M:%S")
         return datetime.now() - last_active < timedelta(minutes=5)
     except Exception as e:
-        logger.error(f"Online check failed: {e}")
+        logger.error(f"Online check failed: {e}", exc_info=True)
         return False
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         context.user_data.clear()
-        await update_user_activity(user.id)
+        logger.info(f"Start command from user {user.id}")
 
-        async with aiosqlite.connect(DATABASE) as db:
+        await asyncio.wait_for(
+            update_user_activity(user.id),
+            timeout=OPERATION_TIMEOUT
+        )
+
+        async with await get_db_connection() as db:
             cursor = await db.execute(
                 "SELECT 1 FROM users WHERE id = ?",
                 (user.id,)
@@ -134,7 +156,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_main_menu(update, context)
             
     except Exception as e:
-        logger.error(f"Start error: {e}")
+        logger.error(f"Start error: {e}", exc_info=True)
         await update.message.reply_text("❌ حدث خطأ في بدء التشغيل")
 
 async def start_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -142,7 +164,7 @@ async def start_registration(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("مرحبًا! لنبدأ عملية التسجيل.\nالرجاء إدخال اسمك:")
         context.user_data["state"] = UserStates.REG_NAME
     except Exception as e:
-        logger.error(f"Registration start error: {e}")
+        logger.error(f"Registration start error: {e}", exc_info=True)
         await update.message.reply_text("❌ فشل في بدء التسجيل")
 
 async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -185,7 +207,7 @@ async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
             context.user_data["state"] = UserStates.REG_TYPE
 
     except Exception as e:
-        logger.error(f"Registration error: {e}")
+        logger.error(f"Registration error: {e}", exc_info=True)
         await update.message.reply_text("❌ خطأ في التسجيل")
         context.user_data.clear()
 
@@ -204,7 +226,7 @@ async def handle_type_selection(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data["state"] = UserStates.REG_PHOTO
         
     except Exception as e:
-        logger.error(f"Type selection error: {e}")
+        logger.error(f"Type selection error: {e}", exc_info=True)
         await query.edit_message_text("❌ خطأ في اختيار التصنيف")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -221,7 +243,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await complete_registration(update, context)
         
     except Exception as e:
-        logger.error(f"Photo handling error: {e}")
+        logger.error(f"Photo handling error: {e}", exc_info=True)
         await update.message.reply_text("❌ خطأ في معالجة الصورة")
 
 async def handle_skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -232,7 +254,7 @@ async def handle_skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await complete_registration(query.message, context)
         await query.message.delete()
     except Exception as e:
-        logger.error(f"Skip photo error: {e}")
+        logger.error(f"Skip photo error: {e}", exc_info=True)
         await query.edit_message_text("❌ فشل في تخطي الصورة")
 
 async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -240,12 +262,15 @@ async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TY
         user = update.effective_user
         data = context.user_data
         
-        await db_execute(
-            """INSERT INTO users 
-            (id, username, name, age, bio, type, photo) 
-            VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (user.id, user.username, data["name"], data["age"], 
-             data["bio"], data["type"], data.get("photo"))
+        await asyncio.wait_for(
+            db_execute(
+                """INSERT INTO users 
+                (id, username, name, age, bio, type, photo) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (user.id, user.username, data["name"], data["age"], 
+                data["bio"], data["type"], data.get("photo"))
+            ),
+            timeout=OPERATION_TIMEOUT
         )
         
         await update.message.reply_text("✅ تم التسجيل بنجاح!")
@@ -253,8 +278,9 @@ async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TY
         context.user_data.clear()
         
     except Exception as e:
-        logger.error(f"Registration completion error: {e}")
+        logger.error(f"Registration completion error: {e}", exc_info=True)
         await update.message.reply_text("❌ فشل في إكمال التسجيل")
+        context.user_data.clear()
 
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -268,12 +294,11 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "القائمة الرئيسية:",
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
         
         await request_location(update, context)
         
     except Exception as e:
-        logger.error(f"Main menu error: {e}")
+        logger.error(f"Main menu error: {e}", exc_info=True)
         await update.message.reply_text("❌ خطأ في عرض القائمة")
 
 async def request_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -282,10 +307,9 @@ async def request_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = ReplyKeyboardMarkup([[location_keyboard]], resize_keyboard=True)
         await update.message.reply_text(
             "الرجاء مشاركة موقعك:",
-            reply_markup=reply_markup
-        )
+            reply_markup=reply_markup)
     except Exception as e:
-        logger.error(f"Location request error: {e}")
+        logger.error(f"Location request error: {e}", exc_info=True)
 
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -295,30 +319,32 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not (-90 <= location.latitude <= 90) or not (-180 <= location.longitude <= 180):
             raise ValueError("Invalid coordinates")
             
-        await db_execute(
-            "UPDATE users SET lat = ?, lon = ? WHERE id = ?",
-            (location.latitude, location.longitude, user.id)
+        await asyncio.wait_for(
+            db_execute(
+                "UPDATE users SET lat = ?, lon = ? WHERE id = ?",
+                (location.latitude, location.longitude, user.id)
+            ),
+            timeout=OPERATION_TIMEOUT
         )
         
         await update.message.reply_text("📍 تم تحديث موقعك!")
         await show_nearby_users(update, context)
         
     except ValueError as ve:
-        logger.warning(f"Invalid location: {ve}")
+        logger.warning(f"Invalid location: {ve}", exc_info=True)
         await update.message.reply_text("❌ إحداثيات غير صالحة")
     except Exception as e:
-        logger.error(f"Location handling error: {e}")
+        logger.error(f"Location handling error: {e}", exc_info=True)
         await update.message.reply_text("❌ خطأ في الموقع")
 
 async def show_nearby_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
         
-        async with aiosqlite.connect(DATABASE) as db:
+        async with await get_db_connection() as db:
             cursor = await db.execute(
                 "SELECT lat, lon FROM users WHERE id = ?",
-                (user.id,)
-            )
+                (user.id,))
             user_loc = await cursor.fetchone()
             
             if not user_loc or None in user_loc:
@@ -348,11 +374,10 @@ async def show_nearby_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await update.message.reply_text(
             "المستخدمون القريبون:",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
+            reply_markup=InlineKeyboardMarkup(buttons))
             
     except Exception as e:
-        logger.error(f"Nearby users error: {e}")
+        logger.error(f"Nearby users error: {e}", exc_info=True)
         await update.message.reply_text("❌ خطأ في عرض المستخدمين")
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -370,11 +395,10 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         user_id = int(query.data.split("_")[1])
         
-        async with aiosqlite.connect(DATABASE) as db:
+        async with await get_db_connection() as db:
             cursor = await db.execute(
                 "SELECT name, age, bio, type, photo FROM users WHERE id = ?",
-                (user_id,)
-            )
+                (user_id,))
             profile = await cursor.fetchone()
 
         if not profile:
@@ -394,23 +418,24 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_photo(
                 photo=profile[4],
                 caption=caption,
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
+                reply_markup=InlineKeyboardMarkup(buttons))
         else:
             await query.message.reply_text(
                 caption,
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
+                reply_markup=InlineKeyboardMarkup(buttons))
             
     except Exception as e:
-        logger.error(f"Profile view error: {e}")
+        logger.error(f"Profile view error: {e}", exc_info=True)
         await query.edit_message_text("❌ خطأ في عرض الملف")
 
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         query = update.callback_query
         await query.answer()
-        await update_user_activity(query.from_user.id)
+        await asyncio.wait_for(
+            update_user_activity(query.from_user.id),
+            timeout=OPERATION_TIMEOUT
+        )
 
         if query.data == "skip_photo":
             await handle_skip_photo(query, context)
@@ -427,9 +452,12 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif query.data.startswith("view_"):
             await view_profile(query, context)
 
+    except asyncio.TimeoutError:
+        logger.error("Button processing timed out")
+        await query.edit_message_text("⌛ انتهى الوقت المخصص لهذه العملية")
     except Exception as e:
-        logger.error(f"Button handling error: {e}")
-        await query.edit_message_text("❌ حدث خطأ غير متوقع")
+        logger.error(f"Button handling error: {e}", exc_info=True)
+        await query.edit_message_text("⚠️ حدث خطأ غير متوقع")
 
 async def refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
@@ -437,7 +465,7 @@ async def refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         await show_nearby_users(query.message, context)
     except Exception as e:
-        logger.error(f"Refresh error: {e}")
+        logger.error(f"Refresh error: {e}", exc_info=True)
         await query.edit_message_text("❌ فشل في التحديث")
 
 async def edit_profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -447,7 +475,7 @@ async def edit_profile_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.reply_text("✨ اختر ما تريد تحديثه:\n1. الاسم\n2. العمر\n3. النبذة\n4. التصنيف")
         context.user_data["update_stage"] = "choice"
     except Exception as e:
-        logger.error(f"Edit profile error: {e}")
+        logger.error(f"Edit profile error: {e}", exc_info=True)
         await query.edit_message_text("❌ فشل في بدء التعديل")
 
 async def report_user_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -457,7 +485,7 @@ async def report_user_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.message.reply_text("📝 الرجاء إدخال معرف المستخدم الذي تريد الإبلاغ عنه:")
         context.user_data["report_stage"] = "user_id"
     except Exception as e:
-        logger.error(f"Report user error: {e}")
+        logger.error(f"Report user error: {e}", exc_info=True)
         await query.edit_message_text("❌ فشل في بدء الإبلاغ")
 
 async def feedback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -467,25 +495,43 @@ async def feedback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("📝 الرجاء كتابة ملاحظاتك أو اقتراحاتك:")
         context.user_data["feedback_stage"] = "message"
     except Exception as e:
-        logger.error(f"Feedback error: {e}")
+        logger.error(f"Feedback error: {e}", exc_info=True)
         await query.edit_message_text("❌ فشل في بدء إرسال الملاحظات")
+
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.error(f"Unhandled exception: {context.error}", exc_info=True)
+    try:
+        if update:
+            await update.message.reply_text("⚠️ حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى")
+    except:
+        try:
+            await update.callback_query.message.reply_text("⚠️ حدث خطأ غير متوقع، يرجى المحاولة مرة أخرى")
+        except:
+            pass
 
 async def main():
     try:
         await init_db()
         app = ApplicationBuilder().token(BOT_TOKEN).build()
         
+        app.add_error_handler(error_handler)
         app.add_handler(CommandHandler("start", start))
         app.add_handler(CallbackQueryHandler(handle_button))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_registration))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         app.add_handler(MessageHandler(filters.LOCATION, handle_location))
         
+        logger.info("Starting bot...")
         await app.run_polling()
         
     except Exception as e:
-        logger.critical(f"Fatal error: {e}")
+        logger.critical(f"Fatal error: {e}", exc_info=True)
         raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    except Exception as e:
+        logger.critical(f"Critical failure: {e}", exc_info=True)
