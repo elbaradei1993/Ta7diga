@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Constants
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 DATABASE = "users.db"
-ADMIN_ID = 123456789  # Replace with your Telegram user ID for admin features
+ADMIN_ID = 1796978458  # Replace with your Telegram user ID for admin features
 PHOTO_PROMPT = "📸 يرجى إرسال صورة شخصية (اختياري):\n(يمكنك تخطي هذا الخطوة بالضغط على الزر أدناه)"
 SKIP_PHOTO_BUTTON = [[InlineKeyboardButton("تخطي الصورة", callback_data="skip_photo")]]
 
@@ -397,7 +397,7 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("delete", delete_account))
-    app.add_handler(CommandHandler("update", update_profile))
+    app.add_handler(CommandHandler("update", edit_profile))  # Fixed: Changed update_profile to edit_profile
     app.add_handler(CommandHandler("report", report_user))
     app.add_handler(CommandHandler("feedback", feedback))
     app.add_handler(CommandHandler("broadcast", broadcast))
