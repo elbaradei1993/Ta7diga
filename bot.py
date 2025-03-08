@@ -141,8 +141,11 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await show_user_profile(query, user_id)
 
         elif query.data.startswith("request_"):
-            _, receiver_id, request_id = query.data.split("_")
-            await handle_chat_request(query, receiver_id, request_id)
+            parts = query.data.split("_")
+            receiver_id = int(parts[1])
+            request_id = parts[2]
+            await handle_chat_request(query, receiver_id, request_id, context)
+
     except Exception as e:
         logger.error(f"Button handling error: {e}")
         await query.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
@@ -247,17 +250,25 @@ async def show_user_profile(query: Update, user_id: int):
         logger.error(f"Profile show error: {e}")
         await query.message.reply_text("❌ حدث خطأ في عرض الملف الشخصي")
 
-async def handle_chat_request(query: Update, receiver_id: int, request_id: str):
+async def handle_chat_request(query: Update, receiver_id: int, request_id: str, context: ContextTypes.DEFAULT_TYPE):
     try:
+        # Get sender info from callback query
+        sender = query.from_user
         buttons = [
             [InlineKeyboardButton("✅ قبول", callback_data=f"accept_{request_id}")],
             [InlineKeyboardButton("❌ رفض", callback_data=f"reject_{request_id}")]
         ]
-        await query.message.edit_text("📩 تم إرسال طلب الدردشة، انتظر الموافقة")
-        await query.bot.send_message(
+        
+        # Edit original message
+        await query.edit_message_text("📩 تم إرسال طلب الدردشة، انتظر الموافقة")
+        
+        # Send request to receiver
+        await context.bot.send_message(
             chat_id=receiver_id,
-            text=f"📩 لديك طلب دردشة جديد من {query.from_user.name}",
-            reply_markup=InlineKeyboardMarkup(buttons))
+            text=f"📩 لديك طلب دردشة جديد من {sender.first_name}",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+
     except Exception as e:
         logger.error(f"Chat request error: {e}")
         await query.message.reply_text("❌ فشل إرسال طلب الدردشة")
@@ -269,23 +280,40 @@ async def handle_request_response(update: Update, context: ContextTypes.DEFAULT_
         action, request_id = query.data.split("_")
 
         async with aiosqlite.connect(DATABASE) as db:
-            cursor = await db.execute("SELECT sender_id, receiver_id FROM requests WHERE id=?", (request_id,))
+            # Get request details
+            cursor = await db.execute(
+                "SELECT sender_id, receiver_id FROM requests WHERE id=?",
+                (request_id,)
+            )
             sender_id, receiver_id = await cursor.fetchone()
 
             if action == "accept":
-                await db.execute("UPDATE requests SET status='accepted' WHERE id=?", (request_id,))
-                await query.bot.send_message(
+                # Create direct chat link
+                await db.execute(
+                    "UPDATE requests SET status='accepted' WHERE id=?",
+                    (request_id,)
+                )
+                await context.bot.send_message(
                     sender_id,
-                    text=f"✅ تم قبول طلب الدردشة! يمكنك البدء بالدردشة مع {query.from_user.name}",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
-                        "💬 بدء الدردشة",
-                        url=f"tg://user?id={receiver_id}"
-                    )]])
+                    text=f"✅ تم قبول طلب الدردشة! يمكنك البدء بالدردشة مع {query.from_user.first_name}",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton(
+                            "💬 بدء الدردشة",
+                            url=f"tg://user?id={receiver_id}"
+                        )
+                    ]])
                 )
             else:
-                await db.execute("DELETE FROM requests WHERE id=?", (request_id,))
-                await query.bot.send_message(sender_id, "❌ تم رفض طلب الدردشة")
+                await db.execute(
+                    "DELETE FROM requests WHERE id=?",
+                    (request_id,)
+                )
+                await context.bot.send_message(
+                    sender_id,
+                    "❌ تم رفض طلب الدردشة"
+                )
             await db.commit()
+
     except Exception as e:
         logger.error(f"Request response error: {e}")
         await query.message.reply_text("❌ فشل معالجة الطلب")
