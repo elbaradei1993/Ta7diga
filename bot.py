@@ -35,7 +35,7 @@ DATABASE = "users.db"
 ADMIN_ID = 1796978458
 PHOTO_PROMPT = "📸 يرجى إرسال صورة شخصية (اختياري):\n(يمكنك تخطي هذا الخطوة بالضغط على الزر أدناه)"
 SKIP_PHOTO_BUTTON = [[InlineKeyboardButton("تخطي الصورة", callback_data="skip_photo")]]
-MAX_PHOTO_SIZE = 5_000_000  # 5MB
+MAX_PHOTO_SIZE = 50_000_000  # 50MB
 
 # Helper functions
 def calculate_distance(lat1, lon1, lat2, lon2):
@@ -185,7 +185,18 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await help_command(query.message, context)
         elif query.data == "edit_profile":
             await edit_profile_handler(query, context)
-        # Add other button handlers here
+        elif query.data == "report_user":
+            await report_user_handler(query, context)
+        elif query.data == "feedback":
+            await feedback_handler(query, context)
+        elif query.data == "share_location":
+            await show_main_menu(query.message)
+        elif query.data == "skip_photo":
+            await handle_skip_photo(query, context)
+        elif query.data.startswith("type_"):
+            await handle_type_selection(query, context)
+        elif query.data.startswith("view_"):
+            await handle_profile_view(query)
 
     except Exception as e:
         logger.error(f"Button handling error: {e}")
@@ -203,6 +214,88 @@ async def delete_account_handler(query: Update, context: ContextTypes.DEFAULT_TY
         await query.edit_message_text("❌ فشل في حذف الحساب")
 
 # **************************************
+# MESSAGE HANDLERS
+# **************************************
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(update.message.from_user.id)
+        text = update.message.text
+        user_data = context.user_data
+
+        if user_data.get("registration_stage") == "name":
+            if len(text) < 2 or any(char.isdigit() for char in text):
+                await update.message.reply_text("❌ يرجى إدخال اسم صحيح (بدون أرقام)")
+                return
+            user_data["name"] = text
+            await update.message.reply_text("كم عمرك؟")
+            user_data["registration_stage"] = "age"
+
+        elif user_data.get("registration_stage") == "age":
+            if not text.isdigit() or not (13 <= int(text) <= 100):
+                await update.message.reply_text("❌ يرجى إدخال عمر صحيح بين 13 و 100 سنة!")
+                return
+            user_data["age"] = int(text)
+            await update.message.reply_text("أخبرنا عن نفسك (نبذة قصيرة):")
+            user_data["registration_stage"] = "bio"
+
+        elif user_data.get("registration_stage") == "bio":
+            if len(text) < 10:
+                await update.message.reply_text("❌ يرجى إدخال نبذة تحتوي على الأقل 10 أحرف!")
+                return
+            user_data["bio"] = text
+            keyboard = [
+                [InlineKeyboardButton("موجب", callback_data="type_موجب")],
+                [InlineKeyboardButton("سالب", callback_data="type_سالب")],
+                [InlineKeyboardButton("مبادل", callback_data="type_مبادل")]
+            ]
+            await update.message.reply_text("اختر تصنيفك:", reply_markup=InlineKeyboardMarkup(keyboard))
+            user_data["registration_stage"] = "type"
+
+        elif user_data.get("report_stage") == "user_id":
+            if not text.isdigit():
+                await update.message.reply_text("❌ يرجى إدخال معرف مستخدم صحيح (أرقام فقط)!")
+                return
+            try:
+                async with aiosqlite.connect(DATABASE) as db:
+                    await db.execute("INSERT INTO reports (reporter_id, reported_user_id) VALUES (?, ?)",
+                                    (update.message.from_user.id, int(text)))
+                    await db.commit()
+                await update.message.reply_text(f"✅ تم الإبلاغ عن المستخدم {text}.")
+                await context.bot.send_message(
+                    ADMIN_ID,
+                    f"🚨 تقرير جديد:\nالمُبلغ: {update.message.from_user.id}\nالمُبلغ عنه: {text}"
+                )
+            except Exception as e:
+                logger.error(f"Report failed: {e}")
+                await update.message.reply_text("❌ فشل في تسجيل التقرير")
+            finally:
+                user_data.clear()
+
+        elif user_data.get("feedback_stage") == "message":
+            if len(text) < 5:
+                await update.message.reply_text("❌ يرجى إدخال ملاحظات مفيدة أكثر!")
+                return
+            try:
+                async with aiosqlite.connect(DATABASE) as db:
+                    await db.execute("INSERT INTO feedback (user_id, message) VALUES (?, ?)",
+                                    (update.message.from_user.id, text))
+                    await db.commit()
+                await update.message.reply_text("✅ تم استلام ملاحظاتك. شكرًا لك!")
+                await context.bot.send_message(
+                    ADMIN_ID,
+                    f"📩 ملاحظات جديدة من {update.message.from_user.id}:\n{text}"
+                )
+            except Exception as e:
+                logger.error(f"Feedback save failed: {e}")
+                await update.message.reply_text("❌ فشل في حفظ الملاحظات")
+            finally:
+                user_data.clear()
+
+    except Exception as e:
+        logger.error(f"Message handling error: {e}")
+        await update.message.reply_text("❌ حدث خطأ غير متوقع")
+
+# **************************************
 # MAIN FUNCTION
 # **************************************
 async def main():
@@ -213,7 +306,9 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("delete", delete_account))
-    # Add other command handlers here
+    app.add_handler(CommandHandler("update", edit_profile))
+    app.add_handler(CommandHandler("report", report_user))
+    app.add_handler(CommandHandler("feedback", feedback))
     
     # Callback handlers
     app.add_handler(CallbackQueryHandler(handle_button))
