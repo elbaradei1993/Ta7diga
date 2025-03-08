@@ -70,49 +70,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     async with aiosqlite.connect(DATABASE) as db:
         cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
-        if not await cursor.fetchone():
-            await register_user(update, context)
-            return
-    await show_main_menu(update)
+        user_data = await cursor.fetchone()
 
-async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✨ مرحبا! سجل نفسك أولا\nأدخل اسمك:")
-    context.user_data["registration_stage"] = "name"
+    # Create inline buttons for the commands
+    keyboard = [
+        [InlineKeyboardButton("🛟 المساعدة", callback_data="help_command")],
+        [InlineKeyboardButton("🗑️ حذف الحساب", callback_data="delete_account")],
+        [InlineKeyboardButton("📝 إنشاء/تحديث الملف الشخصي", callback_data="edit_profile")],
+        [InlineKeyboardButton("🚨 الإبلاغ عن مستخدم", callback_data="report_user")],
+        [InlineKeyboardButton("📩 إرسال ملاحظات", callback_data="feedback")],
+        [InlineKeyboardButton("📍 مشاركة الموقع", callback_data="share_location")]
+    ]
 
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        stage = context.user_data.get("registration_stage")
-        text = update.message.text
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text(
+        "✨ مرحبا! اختر أحد الخيارات التالية:",
+        reply_markup=reply_markup
+    )
 
-        if stage == "name":
-            context.user_data["name"] = text
-            await update.message.reply_text("كم عمرك؟")
-            context.user_data["registration_stage"] = "age"
-
-        elif stage == "age":
-            if not text.isdigit():
-                await update.message.reply_text("يرجى إدخال عمر صحيح!")
-                return
-            context.user_data["age"] = text
-            await update.message.reply_text("أخبرنا عن نفسك (نبذة قصيرة):")
-            context.user_data["registration_stage"] = "bio"
-
-        elif stage == "bio":
-            context.user_data["bio"] = text
-            keyboard = [[InlineKeyboardButton(t, callback_data=f"type_{t}")] 
-                       for t in ["فرع", "حلوة", "برغل"]]
-            await update.message.reply_text("اختر تصنيفك:", reply_markup=InlineKeyboardMarkup(keyboard))
-            context.user_data["registration_stage"] = "type"
-    except Exception as e:
-        logger.error(f"Message handling error: {e}")
-        await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
-
+# Handle button clicks
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         query = update.callback_query
         await query.answer()
 
-        if query.data.startswith("type_"):
+        if query.data == "help_command":
+            await help_command(query.message, context)
+        elif query.data == "delete_account":
+            await delete_account(query.message, context)
+        elif query.data == "edit_profile":
+            await edit_profile(query.message, context)
+        elif query.data == "report_user":
+            await report_user(query.message, context)
+        elif query.data == "feedback":
+            await feedback(query.message, context)
+        elif query.data == "share_location":
+            await show_main_menu(query.message)
+        elif query.data.startswith("type_"):
             selected_type = query.data.split("_")[1]
             user = query.from_user
             user_data = context.user_data
@@ -148,7 +142,60 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Button handling error: {e}")
         await query.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
-# New photo handler
+# Edit profile function
+async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.from_user
+    async with aiosqlite.connect(DATABASE) as db:
+        cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
+        user_data = await cursor.fetchone()
+
+    if user_data:
+        # If the user already has a profile, allow them to update it
+        await update.reply_text("✨ اختر ما تريد تحديثه:\n\n"
+                              "1. الاسم\n"
+                              "2. العمر\n"
+                              "3. النبذة\n"
+                              "4. التصنيف")
+        context.user_data["update_stage"] = "choice"
+    else:
+        # If the user doesn't have a profile, start the registration process
+        await register_user(update, context)
+
+# Register user function
+async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.reply_text("✨ مرحبا! سجل نفسك أولا\nأدخل اسمك:")
+    context.user_data["registration_stage"] = "name"
+
+# Handle messages during registration or profile update
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        stage = context.user_data.get("registration_stage")
+        text = update.message.text
+
+        if stage == "name":
+            context.user_data["name"] = text
+            await update.message.reply_text("كم عمرك؟")
+            context.user_data["registration_stage"] = "age"
+
+        elif stage == "age":
+            if not text.isdigit():
+                await update.message.reply_text("يرجى إدخال عمر صحيح!")
+                return
+            context.user_data["age"] = text
+            await update.message.reply_text("أخبرنا عن نفسك (نبذة قصيرة):")
+            context.user_data["registration_stage"] = "bio"
+
+        elif stage == "bio":
+            context.user_data["bio"] = text
+            keyboard = [[InlineKeyboardButton(t, callback_data=f"type_{t}")] 
+                       for t in ["موجب", "سالب", "مبادل"]]
+            await update.message.reply_text("اختر تصنيفك:", reply_markup=InlineKeyboardMarkup(keyboard))
+            context.user_data["registration_stage"] = "type"
+    except Exception as e:
+        logger.error(f"Message handling error: {e}")
+        await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
+# Handle photo upload
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if context.user_data.get("registration_stage") == "photo":
@@ -164,7 +211,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Photo handling error: {e}")
         await update.message.reply_text("❌ حدث خطأ في حفظ الصورة")
 
-# Location handler
+# Handle location sharing
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         location = update.message.location
@@ -270,7 +317,7 @@ async def show_user_profile(query: Update, user_id: int):
         logger.error(f"Profile show error: {e}")
         await query.message.reply_text("❌ حدث خطأ في عرض الملف الشخصي")
 
-# New admin stats command
+# Admin stats command
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.from_user.id != ADMIN_ID:
         await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة!")
@@ -282,9 +329,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(f"📊 إحصائيات البوت:\n\n👥 عدد المستخدمين: {count[0]}")
 
-# New Commands
-
-# Help Command
+# Help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
         "🛟 *كيفية استخدام البوت:*\n\n"
@@ -297,145 +342,35 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "7. استخدم /feedback لإرسال ملاحظاتك.\n\n"
         "📌 يمكنك تحديث قائمة المستخدمين القريبين باستخدام زر '🔄 تحديث'."
     )
-    await update.message.reply_text(help_text, parse_mode="Markdown")
+    await update.reply_text(help_text, parse_mode="Markdown")
 
-# Delete Account Command
+# Delete account command
 async def delete_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.message.from_user
+    user = update.from_user
     async with aiosqlite.connect(DATABASE) as db:
         await db.execute("DELETE FROM users WHERE id=?", (user.id,))
         await db.commit()
-    await update.message.reply_text("✅ تم حذف حسابك بنجاح!")
+    await update.reply_text("✅ تم حذف حسابك بنجاح!")
 
-# Update Profile Command
-async def update_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✨ اختر ما تريد تحديثه:\n\n"
-                                  "1. الاسم\n"
-                                  "2. العمر\n"
-                                  "3. النبذة\n"
-                                  "4. التصنيف")
-    context.user_data["update_stage"] = "choice"
-
-# Report User Command
+# Report user command
 async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📝 الرجاء إدخال معرف المستخدم الذي تريد الإبلاغ عنه:")
+    await update.reply_text("📝 الرجاء إدخال معرف المستخدم الذي تريد الإبلاغ عنه:")
     context.user_data["report_stage"] = "user_id"
 
-# Feedback Command
+# Feedback command
 async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📝 الرجاء إدخال ملاحظاتك أو اقتراحاتك:")
+    await update.reply_text("📝 الرجاء إدخال ملاحظاتك أو اقتراحاتك:")
     context.user_data["feedback_stage"] = "message"
 
-# Broadcast Command (Admin Only)
+# Broadcast command (Admin Only)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_admin(update.message.from_user.id):
+    if update.message.from_user.id != ADMIN_ID:
         await update.message.reply_text("❌ ليس لديك صلاحية استخدام هذا الأمر.")
         return
     await update.message.reply_text("📢 الرجاء إدخال الرسالة التي تريد بثها:")
     context.user_data["broadcast_stage"] = "message"
 
-# New Handlers for Commands
-
-# Handle Update Profile Messages
-async def handle_update_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        stage = context.user_data.get("update_stage")
-        text = update.message.text
-
-        if stage == "choice":
-            if text == "1":
-                await update.message.reply_text("أدخل اسمك الجديد:")
-                context.user_data["update_stage"] = "name"
-            elif text == "2":
-                await update.message.reply_text("أدخل عمرك الجديد:")
-                context.user_data["update_stage"] = "age"
-            elif text == "3":
-                await update.message.reply_text("أدخل نبذتك الجديدة:")
-                context.user_data["update_stage"] = "bio"
-            elif text == "4":
-                keyboard = [[InlineKeyboardButton(t, callback_data=f"type_{t}")] 
-                           for t in ["فرع", "حلوة", "برغل"]]
-                await update.message.reply_text("اختر تصنيفك الجديد:", reply_markup=InlineKeyboardMarkup(keyboard))
-                context.user_data["update_stage"] = "type"
-            else:
-                await update.message.reply_text("❌ خيار غير صحيح، يرجى المحاولة مرة أخرى.")
-
-        elif stage == "name":
-            async with aiosqlite.connect(DATABASE) as db:
-                await db.execute("UPDATE users SET name=? WHERE id=?", (text, update.message.from_user.id))
-                await db.commit()
-            await update.message.reply_text("✅ تم تحديث الاسم بنجاح!")
-            context.user_data.clear()
-
-        elif stage == "age":
-            if not text.isdigit():
-                await update.message.reply_text("❌ يرجى إدخال عمر صحيح!")
-                return
-            async with aiosqlite.connect(DATABASE) as db:
-                await db.execute("UPDATE users SET age=? WHERE id=?", (int(text), update.message.from_user.id))
-                await db.commit()
-            await update.message.reply_text("✅ تم تحديث العمر بنجاح!")
-            context.user_data.clear()
-
-        elif stage == "bio":
-            async with aiosqlite.connect(DATABASE) as db:
-                await db.execute("UPDATE users SET bio=? WHERE id=?", (text, update.message.from_user.id))
-                await db.commit()
-            await update.message.reply_text("✅ تم تحديث النبذة بنجاح!")
-            context.user_data.clear()
-
-    except Exception as e:
-        logger.error(f"Update profile error: {e}")
-        await update.message.reply_text("❌ حدث خطأ أثناء التحديث، يرجى المحاولة مرة أخرى.")
-
-# Handle Report User Messages
-async def handle_report_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        stage = context.user_data.get("report_stage")
-        text = update.message.text
-
-        if stage == "user_id":
-            if not text.isdigit():
-                await update.message.reply_text("❌ يرجى إدخال معرف مستخدم صحيح!")
-                return
-            context.user_data["reported_user_id"] = int(text)
-            await update.message.reply_text("📝 الرجاء إدخال سبب الإبلاغ:")
-            context.user_data["report_stage"] = "reason"
-
-        elif stage == "reason":
-            reported_user_id = context.user_data.get("reported_user_id")
-            reason = text
-            await context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=f"🚨 تم الإبلاغ عن مستخدم:\n\n"
-                     f"المبلغ: {update.message.from_user.username}\n"
-                     f"المستخدم المبلغ عنه: {reported_user_id}\n"
-                     f"السبب: {reason}"
-            )
-            await update.message.reply_text("✅ تم إرسال التقرير بنجاح!")
-            context.user_data.clear()
-
-    except Exception as e:
-        logger.error(f"Report user error: {e}")
-        await update.message.reply_text("❌ حدث خطأ أثناء الإبلاغ، يرجى المحاولة مرة أخرى.")
-
-# Handle Feedback Messages
-async def handle_feedback_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        feedback_message = update.message.text
-        await context.bot.send_message(
-            chat_id=ADMIN_ID,
-            text=f"📩 ملاحظات جديدة:\n\n"
-                 f"من: {update.message.from_user.username}\n"
-                 f"الرسالة: {feedback_message}"
-        )
-        await update.message.reply_text("✅ تم إرسال ملاحظاتك بنجاح!")
-        context.user_data.clear()
-    except Exception as e:
-        logger.error(f"Feedback error: {e}")
-        await update.message.reply_text("❌ حدث خطأ أثناء إرسال الملاحظات، يرجى المحاولة مرة أخرى.")
-
-# Handle Broadcast Messages
+# Handle broadcast messages
 async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         broadcast_message = update.message.text
@@ -453,7 +388,7 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
         logger.error(f"Broadcast error: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء البث، يرجى المحاولة مرة أخرى.")
 
-# Updated Main Function
+# Main function
 async def main():
     await init_db()
     app = ApplicationBuilder().token(BOT_TOKEN).build()
