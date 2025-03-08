@@ -180,6 +180,15 @@ async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Profile edit init failed: {e}")
         await update.message.reply_text("❌ فشل في بدء تحديث الملف الشخصي")
 
+async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(update.message.from_user.id)
+        await update.message.reply_text("📝 الرجاء إدخال معرف المستخدم الذي تريد الإبلاغ عنه:")
+        context.user_data["report_stage"] = "user_id"
+    except Exception as e:
+        logger.error(f"Report user error: {e}")
+        await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
 # **************************************
 # CALLBACK HANDLERS
 # **************************************
