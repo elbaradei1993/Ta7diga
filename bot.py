@@ -2,7 +2,6 @@ import logging
 import asyncio
 import nest_asyncio
 import aiosqlite
-import uuid
 import math
 from telegram import (
     InlineKeyboardButton, 
@@ -30,7 +29,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants
-BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
+BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"  # Replace with your bot token
 DATABASE = "users.db"
 ADMIN_ID = 1796978458  # Replace with your Telegram user ID for admin features
 PHOTO_PROMPT = "📸 يرجى إرسال صورة شخصية (اختياري):\n(يمكنك تخطي هذا الخطوة بالضغط على الزر أدناه)"
@@ -106,15 +105,16 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await feedback(query.message, context)
         elif query.data == "share_location":
             await show_main_menu(query.message)
-        elif query.data.startswith("type_"):
-            selected_type = query.data.split("_")[1]
+        elif query.data.startswith("type_"):  # Handle type selection
+            selected_type = query.data.split("_")[1]  # Extract the selected type
             user = query.from_user
             user_data = context.user_data
 
+            # Save the selected type to the database
             async with aiosqlite.connect(DATABASE) as db:
-                await db.execute("""INSERT INTO users 
+                await db.execute("""INSERT OR REPLACE INTO users 
                                   (id, username, name, age, bio, type) 
-                                  VALUES (?,?,?,?,?,?)""",
+                                  VALUES (?, ?, ?, ?, ?, ?)""",
                                   (user.id,
                                    user.username,
                                    user_data.get("name"),
@@ -123,11 +123,13 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                    selected_type))
                 await db.commit()
 
+            # Clear the registration data from context
             context.user_data.clear()
-            # Add photo prompt with skip option
+
+            # Prompt the user to upload a photo or skip
             await query.message.reply_text(PHOTO_PROMPT, 
                                          reply_markup=InlineKeyboardMarkup(SKIP_PHOTO_BUTTON))
-            context.user_data["registration_stage"] = "photo"
+            context.user_data["registration_stage"] = "photo"  # Move to the photo stage
 
         elif query.data == "skip_photo":
             await query.message.reply_text("✅ يمكنك الآن مشاركة موقعك!")
@@ -187,10 +189,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif stage == "bio":
             context.user_data["bio"] = text
-            keyboard = [[InlineKeyboardButton(t, callback_data=f"type_{t}")] 
-                       for t in ["موجب", "سالب", "مبادل"]]
-            await update.message.reply_text("اختر تصنيفك:", reply_markup=InlineKeyboardMarkup(keyboard))
-            context.user_data["registration_stage"] = "type"
+            # Create the type selection keyboard
+            keyboard = [
+                [InlineKeyboardButton("موجب", callback_data="type_موجب")],
+                [InlineKeyboardButton("سالب", callback_data="type_سالب")],
+                [InlineKeyboardButton("مبادل", callback_data="type_مبادل")]
+            ]
+            await update.message.reply_text(
+                "اختر تصنيفك:",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            context.user_data["registration_stage"] = "type"  # Move to the type stage
     except Exception as e:
         logger.error(f"Message handling error: {e}")
         await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
