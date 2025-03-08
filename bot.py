@@ -194,8 +194,7 @@ async def show_nearby_users(update: Update, user_id: int):
         await update.message.reply_photo(
             photo=map_url,
             caption="📍 المستخدمين القريبين:",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
+            reply_markup=InlineKeyboardMarkup(buttons))
     except Exception as e:
         logger.error(f"Nearby users error: {e}")
         await update.message.reply_text("❌ حدث خطأ في عرض المستخدمين القريبين")
@@ -218,7 +217,7 @@ async def show_user_profile(query: Update, user_id: int):
         await query.message.reply_photo(
             photo=user[3] if user[3] else "https://via.placeholder.com/200",
             caption=caption,
-            reply_markup=InlineKeyboardMarkup(buttons)
+            reply_markup=InlineKeyboardMarkup(buttons))
     except Exception as e:
         logger.error(f"Profile show error: {e}")
         await query.message.reply_text("❌ حدث خطأ في عرض الملف الشخصي")
@@ -233,7 +232,7 @@ async def handle_chat_request(query: Update, receiver_id: int, request_id: str):
         await query.bot.send_message(
             chat_id=receiver_id,
             text=f"📩 لديك طلب دردشة جديد من {query.from_user.name}",
-            reply_markup=InlineKeyboardMarkup(buttons)
+            reply_markup=InlineKeyboardMarkup(buttons))
     except Exception as e:
         logger.error(f"Chat request error: {e}")
         await query.message.reply_text("❌ فشل إرسال طلب الدردشة")
