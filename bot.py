@@ -189,6 +189,15 @@ async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Report user error: {e}")
         await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
+async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(update.message.from_user.id)
+        await update.message.reply_text("📝 الرجاء إدخال ملاحظاتك أو اقتراحاتك:")
+        context.user_data["feedback_stage"] = "message"
+    except Exception as e:
+        logger.error(f"Feedback command error: {e}")
+        await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
 # **************************************
 # CALLBACK HANDLERS
 # **************************************
@@ -231,6 +240,66 @@ async def delete_account_handler(query: Update, context: ContextTypes.DEFAULT_TY
     except Exception as e:
         logger.error(f"Account deletion failed: {e}")
         await query.edit_message_text("❌ فشل في حذف الحساب")
+
+async def edit_profile_handler(query: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(query.from_user.id)
+        await query.edit_message_text("✨ اختر ما تريد تحديثه:\n\n1. الاسم\n2. العمر\n3. النبذة\n4. التصنيف")
+        context.user_data["update_stage"] = "choice"
+    except Exception as e:
+        logger.error(f"Profile edit handler error: {e}")
+        await query.edit_message_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
+async def report_user_handler(query: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(query.from_user.id)
+        await query.edit_message_text("📝 الرجاء إدخال معرف المستخدم الذي تريد الإبلاغ عنه:")
+        context.user_data["report_stage"] = "user_id"
+    except Exception as e:
+        logger.error(f"Report user handler error: {e}")
+        await query.edit_message_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
+async def feedback_handler(query: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(query.from_user.id)
+        await query.edit_message_text("📝 الرجاء إدخال ملاحظاتك أو اقتراحاتك:")
+        context.user_data["feedback_stage"] = "message"
+    except Exception as e:
+        logger.error(f"Feedback handler error: {e}")
+        await query.edit_message_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
+async def handle_skip_photo(query: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(query.from_user.id)
+        await query.edit_message_text("✅ يمكنك الآن مشاركة موقعك!")
+        await show_main_menu(query.message)
+    except Exception as e:
+        logger.error(f"Skip photo handler error: {e}")
+        await query.edit_message_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
+async def handle_type_selection(query: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        selected_type = query.data.split("_")[1]
+        user = query.from_user
+        user_data = context.user_data
+
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET type=? WHERE id=?", (selected_type, user.id))
+            await db.commit()
+
+        await query.edit_message_text(PHOTO_PROMPT, reply_markup=InlineKeyboardMarkup(SKIP_PHOTO_BUTTON))
+        context.user_data["registration_stage"] = "photo"
+    except Exception as e:
+        logger.error(f"Type selection handler error: {e}")
+        await query.edit_message_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
+
+async def handle_profile_view(query: Update):
+    try:
+        user_id = int(query.data.split("_")[1])
+        await show_user_profile(query, user_id)
+    except Exception as e:
+        logger.error(f"Profile view handler error: {e}")
+        await query.edit_message_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # **************************************
 # MESSAGE HANDLERS
@@ -313,6 +382,136 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Message handling error: {e}")
         await update.message.reply_text("❌ حدث خطأ غير متوقع")
+
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(update.message.from_user.id)
+        if context.user_data.get("registration_stage") == "photo":
+            photo = update.message.photo[-1]
+            if photo.file_size > MAX_PHOTO_SIZE:
+                await update.message.reply_text("❌ حجم الصورة كبير جدًا (الحد الأقصى 5MB)")
+                return
+
+            async with aiosqlite.connect(DATABASE) as db:
+                await db.execute("UPDATE users SET photo=? WHERE id=?", 
+                               (photo.file_id, update.message.from_user.id))
+                await db.commit()
+            
+            context.user_data.pop("registration_stage", None)
+            await update.message.reply_text("✅ تم حفظ صورتك بنجاح! يرجى مشاركة موقعك الآن.")
+            await show_main_menu(update.message)
+
+    except Exception as e:
+        logger.error(f"Photo handling error: {e}")
+        await update.message.reply_text("❌ حدث خطأ في حفظ الصورة")
+
+async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(update.message.from_user.id)
+        location = update.message.location
+        user = update.message.from_user
+        
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET lat=?, lon=? WHERE id=?", 
+                            (location.latitude, location.longitude, user.id))
+            await db.commit()
+        
+        await update.message.reply_text("📍 تم حفظ موقعك بنجاح!")
+        await show_nearby_users(update, user.id)
+
+    except Exception as e:
+        logger.error(f"Location handling error: {e}")
+        await update.message.reply_text("❌ حدث خطأ في حفظ الموقع")
+
+# **************************************
+# UI COMPONENTS
+# **************************************
+async def show_main_menu(update: Update):
+    try:
+        location_button = KeyboardButton("📍 مشاركة الموقع", request_location=True)
+        reply_markup = ReplyKeyboardMarkup([[location_button]], resize_keyboard=True)
+        
+        if hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.message.reply_text("اختر خيارًا:", reply_markup=reply_markup)
+        else:
+            await update.message.reply_text("اختر خيارًا:", reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"Main menu error: {e}")
+
+async def show_nearby_users(update: Update, user_id: int):
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT lat, lon FROM users WHERE id=?", (user_id,))
+            user_loc = await cursor.fetchone()
+            
+            if not user_loc or None in user_loc:
+                await update.message.reply_text("❌ يرجى مشاركة موقعك أولاً")
+                return
+
+            user_lat, user_lon = user_loc
+            cursor = await db.execute("""
+                SELECT id, name, lat, lon 
+                FROM users 
+                WHERE id != ? 
+                AND lat IS NOT NULL 
+                AND lon IS NOT NULL
+            """, (user_id,))
+            users = await cursor.fetchall()
+
+        if not users:
+            await update.message.reply_text("⚠️ لا يوجد مستخدمين قريبين")
+            return
+
+        nearby_users = []
+        for uid, name, lat, lon in users:
+            distance = calculate_distance(user_lat, user_lon, lat, lon)
+            online_status = "🟢" if await is_user_online(uid) else "🔴"
+            nearby_users.append((uid, name, distance, online_status))
+
+        nearby_users.sort(key=lambda x: x[2])
+        buttons = [
+            [InlineKeyboardButton(
+                f"{online_status} {name} ({distance:.1f} km)",
+                callback_data=f"view_{uid}"
+            )] for uid, name, distance, online_status in nearby_users[:20]
+        ]
+
+        await update.message.reply_text(
+            "👥 المستخدمين القريبين:",
+            reply_markup=InlineKeyboardMarkup(buttons)
+        )
+    except Exception as e:
+        logger.error(f"Nearby users error: {e}")
+        await update.message.reply_text("❌ حدث خطأ في عرض المستخدمين القريبين")
+
+async def show_user_profile(query: Update, user_id: int):
+    try:
+        await update_user_activity(query.from_user.id)
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT name, age, bio, type, photo FROM users WHERE id=?", (user_id,))
+            user = await cursor.fetchone()
+
+        if not user:
+            await query.edit_message_text("❌ المستخدم غير موجود")
+            return
+
+        online_status = "🟢 متصل" if await is_user_online(user_id) else "🔴 غير متصل"
+        caption = (
+            f"👤 الاسم: {user[0]}\n"
+            f"📅 العمر: {user[1]}\n"
+            f"📝 النبذة: {user[2]}\n"
+            f"📌 التصنيف: {user[3]}\n"
+            f"🕒 الحالة: {online_status}"
+        )
+
+        buttons = [[InlineKeyboardButton("💌 إرسال رسالة", url=f"tg://user?id={user_id}")]]
+        await query.message.reply_photo(
+            photo=user[4] if user[4] else "https://via.placeholder.com/200",
+            caption=caption,
+            reply_markup=InlineKeyboardMarkup(buttons)
+    except Exception as e:
+        logger.error(f"Profile show error: {e}")
+        await query.edit_message_text("❌ حدث خطأ في عرض الملف الشخصي")
 
 # **************************************
 # MAIN FUNCTION
