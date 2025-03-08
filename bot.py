@@ -46,11 +46,9 @@ class UserStates:
 
 # Database operations
 async def init_db():
-    """Initialize database with proper error handling"""
     try:
         async with aiosqlite.connect(DATABASE) as db:
             await db.execute("PRAGMA foreign_keys = ON")
-            
             await db.execute("""CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY,
                 username TEXT,
@@ -63,25 +61,19 @@ async def init_db():
                 photo TEXT,
                 last_active DATETIME DEFAULT CURRENT_TIMESTAMP
             )""")
-            
             await db.execute("""CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 reporter_id INTEGER NOT NULL,
                 reported_user_id INTEGER NOT NULL,
                 resolved BOOLEAN DEFAULT FALSE,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(reporter_id) REFERENCES users(id),
-                FOREIGN KEY(reported_user_id) REFERENCES users(id)
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )""")
-            
             await db.execute("""CREATE TABLE IF NOT EXISTS feedback (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 message TEXT NOT NULL,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(user_id) REFERENCES users(id)
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
             )""")
-            
             await db.commit()
         logger.info("Database initialized successfully")
     except Exception as e:
@@ -89,7 +81,6 @@ async def init_db():
         raise
 
 async def db_execute(query: str, params: tuple = ()):
-    """Safe database execution wrapper"""
     try:
         async with aiosqlite.connect(DATABASE) as db:
             await db.execute(query, params)
@@ -99,7 +90,6 @@ async def db_execute(query: str, params: tuple = ()):
         raise
 
 async def update_user_activity(user_id: int):
-    """Update user's last active timestamp"""
     try:
         await db_execute(
             "UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?",
@@ -109,7 +99,6 @@ async def update_user_activity(user_id: int):
         logger.error(f"Activity update failed: {e}")
 
 async def is_user_online(user_id: int) -> bool:
-    """Check if user was active in last 5 minutes"""
     try:
         async with aiosqlite.connect(DATABASE) as db:
             cursor = await db.execute(
@@ -129,14 +118,11 @@ async def is_user_online(user_id: int) -> bool:
 
 # Command handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start command with proper state management"""
     try:
         user = update.effective_user
         context.user_data.clear()
-        
         await update_user_activity(user.id)
-        
-        # Check existing registration
+
         async with aiosqlite.connect(DATABASE) as db:
             cursor = await db.execute(
                 "SELECT 1 FROM users WHERE id = ?",
@@ -151,14 +137,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
     except Exception as e:
         logger.error(f"Start error: {e}")
-        await update.message.reply_text("❌ حدث خطأ في بدء التشغيل، يرجى المحاولة لاحقًا")
+        await update.message.reply_text("❌ حدث خطأ في بدء التشغيل")
 
 async def start_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Initiate registration workflow"""
     try:
-        await update.message.reply_text(
-            "مرحبًا! لنبدأ عملية التسجيل.\nالرجاء إدخال اسمك:"
-        )
+        await update.message.reply_text("مرحبًا! لنبدأ عملية التسجيل.\nالرجاء إدخال اسمك:")
         context.user_data["state"] = UserStates.REG_NAME
     except Exception as e:
         logger.error(f"Registration start error: {e}")
@@ -166,7 +149,6 @@ async def start_registration(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 # Registration workflow
 async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle multi-step registration process"""
     try:
         user = update.effective_user
         text = update.message.text
@@ -174,27 +156,24 @@ async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
 
         if state == UserStates.REG_NAME:
             if len(text) < 2 or any(c.isdigit() for c in text):
-                await update.message.reply_text("❌ اسم غير صحيح، الرجاء المحاولة مرة أخرى")
+                await update.message.reply_text("❌ اسم غير صحيح")
                 return
-                
             context.user_data["name"] = text
             await update.message.reply_text("الرجاء إدخال عمرك:")
             context.user_data["state"] = UserStates.REG_AGE
 
         elif state == UserStates.REG_AGE:
             if not text.isdigit() or not 13 <= int(text) <= 100:
-                await update.message.reply_text("❌ عمر غير صالح، يجب أن يكون بين 13 و 100")
+                await update.message.reply_text("❌ عمر غير صالح")
                 return
-                
             context.user_data["age"] = int(text)
             await update.message.reply_text("أخبرنا عن نفسك (وصف قصير):")
             context.user_data["state"] = UserStates.REG_BIO
 
         elif state == UserStates.REG_BIO:
             if len(text) < 10:
-                await update.message.reply_text("❌ الوصف يجب أن يحتوي على الأقل 10 أحرف")
+                await update.message.reply_text("❌ الوصف قصير جدًا")
                 return
-                
             context.user_data["bio"] = text
             keyboard = [
                 [InlineKeyboardButton("موجب", callback_data="type_موجب")],
@@ -204,20 +183,17 @@ async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
             await update.message.reply_text(
                 "اختر تصنيفك:",
                 reply_markup=InlineKeyboardMarkup(keyboard)
-            )
             context.user_data["state"] = UserStates.REG_TYPE
 
     except Exception as e:
         logger.error(f"Registration error: {e}")
-        await update.message.reply_text("❌ حدث خطأ في التسجيل، يرجى البدء من جديد")
+        await update.message.reply_text("❌ خطأ في التسجيل")
         context.user_data.clear()
 
 async def handle_type_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle user type selection"""
     try:
         query = update.callback_query
         await query.answer()
-        
         selected_type = query.data.split("_")[1]
         context.user_data["type"] = selected_type
         
@@ -225,22 +201,20 @@ async def handle_type_selection(update: Update, context: ContextTypes.DEFAULT_TY
             "📸 يرجى إرسال صورة شخصية (اختياري):\n"
             "يمكنك تخطي هذه الخطوة بالضغط على الزر أدناه",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("تخطي الصورة", callback_data="skip_photo")]])
-        )
         context.user_data["state"] = UserStates.REG_PHOTO
         
     except Exception as e:
         logger.error(f"Type selection error: {e}")
-        await query.edit_message_text("❌ حدث خطأ في اختيار التصنيف")
+        await query.edit_message_text("❌ خطأ في اختيار التصنيف")
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle profile photo upload"""
     try:
         if context.user_data.get("state") != UserStates.REG_PHOTO:
             return
 
         photo = update.message.photo[-1]
         if photo.file_size > MAX_PHOTO_SIZE:
-            await update.message.reply_text("❌ حجم الصورة كبير جدًا (الحد الأقصى 5MB)")
+            await update.message.reply_text("❌ حجم الصورة كبير جدًا")
             return
 
         context.user_data["photo"] = photo.file_id
@@ -248,10 +222,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Photo handling error: {e}")
-        await update.message.reply_text("❌ حدث خطأ في معالجة الصورة")
+        await update.message.reply_text("❌ خطأ في معالجة الصورة")
 
 async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Finalize user registration"""
     try:
         user = update.effective_user
         data = context.user_data
@@ -260,16 +233,8 @@ async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TY
             """INSERT INTO users 
             (id, username, name, age, bio, type, photo) 
             VALUES (?, ?, ?, ?, ?, ?, ?)""",
-            (
-                user.id,
-                user.username,
-                data["name"],
-                data["age"],
-                data["bio"],
-                data["type"],
-                data.get("photo")
-            )
-        )
+            (user.id, user.username, data["name"], data["age"], 
+             data["bio"], data["type"], data.get("photo"))
         
         await update.message.reply_text("✅ تم التسجيل بنجاح!")
         await show_main_menu(update, context)
@@ -281,7 +246,6 @@ async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TY
 
 # Main menu and navigation
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Display main menu with options"""
     try:
         keyboard = [
             [InlineKeyboardButton("🔄 تحديث القائمة", callback_data="refresh")],
@@ -293,29 +257,25 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "القائمة الرئيسية:",
             reply_markup=InlineKeyboardMarkup(keyboard)
-            
+        
         await request_location(update, context)
         
     except Exception as e:
         logger.error(f"Main menu error: {e}")
-        await update.message.reply_text("❌ حدث خطأ في عرض القائمة الرئيسية")
+        await update.message.reply_text("❌ خطأ في عرض القائمة")
 
 async def request_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Request user location"""
     try:
         location_keyboard = KeyboardButton(text="📍 مشاركة الموقع", request_location=True)
         reply_markup = ReplyKeyboardMarkup([[location_keyboard]], resize_keyboard=True)
-        
         await update.message.reply_text(
-            "الرجاء مشاركة موقعك لتحديد المستخدمين القريبين:",
-            reply_markup=reply_markup
-        )
+            "الرجاء مشاركة موقعك:",
+            reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"Location request error: {e}")
 
 # Location handling
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Process user location updates"""
     try:
         location = update.message.location
         user = update.effective_user
@@ -325,99 +285,82 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         await db_execute(
             "UPDATE users SET lat = ?, lon = ? WHERE id = ?",
-            (location.latitude, location.longitude, user.id)
-        )
+            (location.latitude, location.longitude, user.id))
         
-        await update.message.reply_text("📍 تم تحديث موقعك بنجاح!")
+        await update.message.reply_text("📍 تم تحديث موقعك!")
         await show_nearby_users(update, context)
         
     except ValueError as ve:
         logger.warning(f"Invalid location: {ve}")
-        await update.message.reply_text("❌ إحداثيات موقع غير صالحة")
+        await update.message.reply_text("❌ إحداثيات غير صالحة")
     except Exception as e:
         logger.error(f"Location handling error: {e}")
-        await update.message.reply_text("❌ حدث خطأ في معالجة الموقع")
+        await update.message.reply_text("❌ خطأ في الموقع")
 
 # Nearby users functionality
 async def show_nearby_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Display list of nearby users"""
     try:
         user = update.effective_user
         
         async with aiosqlite.connect(DATABASE) as db:
-            # Get current user's location
             cursor = await db.execute(
                 "SELECT lat, lon FROM users WHERE id = ?",
-                (user.id,)
+                (user.id,))
             user_loc = await cursor.fetchone()
             
             if not user_loc or None in user_loc:
-                await update.message.reply_text("❌ يرجى مشاركة موقعك أولاً")
+                await update.message.reply_text("❌ يرجى مشاركة موقعك")
                 return
 
-            # Find nearby users
             cursor = await db.execute("""
                 SELECT id, name, lat, lon 
                 FROM users 
                 WHERE id != ? 
                 AND lat IS NOT NULL 
                 AND lon IS NOT NULL
-                ORDER BY last_active DESC
-                LIMIT 50
-            """, (user.id,))
-            
+                LIMIT 50""", (user.id,))
             users = await cursor.fetchall()
 
         if not users:
-            await update.message.reply_text("⚠️ لا يوجد مستخدمين قريبين حالياً")
+            await update.message.reply_text("⚠️ لا يوجد مستخدمين قريبين")
             return
 
-        # Calculate distances and prepare buttons
         buttons = []
         for uid, name, lat, lon in users:
             distance = calculate_distance(user_loc[0], user_loc[1], lat, lon)
             online = await is_user_online(uid)
             buttons.append([InlineKeyboardButton(
-                f"{'🟢' if online else '🔴'} {name} ({distance:.1f} km)",
-                callback_data=f"view_{uid}"
-            )])
+                f"{'🟢' if online else '🔴'} {name} ({distance:.1f} كم)",
+                callback_data=f"view_{uid}")])
 
         await update.message.reply_text(
             "المستخدمون القريبون:",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-        
+            reply_markup=InlineKeyboardMarkup(buttons))
+            
     except Exception as e:
         logger.error(f"Nearby users error: {e}")
-        await update.message.reply_text("❌ حدث خطأ في عرض المستخدمين القريبين")
+        await update.message.reply_text("❌ خطأ في عرض المستخدمين")
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance between two coordinates using Haversine formula"""
-    R = 6371  # Earth radius in km
+    R = 6371
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    
     a = (math.sin(dlat/2) * math.sin(dlat/2) +
          math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
          math.sin(dlon/2) * math.sin(dlon/2))
-    
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 # Profile viewing
 async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Display user profile"""
     try:
         query = update.callback_query
         await query.answer()
-        
         user_id = int(query.data.split("_")[1])
         
         async with aiosqlite.connect(DATABASE) as db:
             cursor = await db.execute(
                 "SELECT name, age, bio, type, photo FROM users WHERE id = ?",
-                (user_id,)
-            )
+                (user_id,))
             profile = await cursor.fetchone()
 
         if not profile:
@@ -425,13 +368,11 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         online_status = "🟢 متصل" if await is_user_online(user_id) else "🔴 غير متصل"
-        caption = (
-            f"👤 الاسم: {profile[0]}\n"
-            f"📅 العمر: {profile[1]}\n"
-            f"📝 الوصف: {profile[2]}\n"
-            f"📌 التصنيف: {profile[3]}\n"
-            f"🕒 الحالة: {online_status}"
-        )
+        caption = (f"👤 الاسم: {profile[0]}\n"
+                   f"📅 العمر: {profile[1]}\n"
+                   f"📝 الوصف: {profile[2]}\n"
+                   f"📌 التصنيف: {profile[3]}\n"
+                   f"🕒 الحالة: {online_status}")
 
         buttons = [[InlineKeyboardButton("💌 مراسلة", url=f"tg://user?id={user_id}")]]
         
@@ -439,33 +380,24 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_photo(
                 photo=profile[4],
                 caption=caption,
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
+                reply_markup=InlineKeyboardMarkup(buttons))
         else:
             await query.message.reply_text(
                 caption,
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
+                reply_markup=InlineKeyboardMarkup(buttons))
             
     except Exception as e:
         logger.error(f"Profile view error: {e}")
-        await query.edit_message_text("❌ حدث خطأ في عرض الملف الشخصي")
+        await query.edit_message_text("❌ خطأ في عرض الملف")
 
-# Main application setup
+# Main application
 async def main():
-    """Main application setup"""
     try:
         await init_db()
         app = ApplicationBuilder().token(BOT_TOKEN).build()
         
-        # Verify bot token
-        bot_info = await app.bot.get_me()
-        logger.info(f"Starting bot: @{bot_info.username}")
-        
         # Command handlers
         app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("help", help_command))
-        app.add_handler(CommandHandler("delete", delete_account))
         
         # Callback handlers
         app.add_handler(CallbackQueryHandler(view_profile, pattern=r"^view_\d+$"))
