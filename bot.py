@@ -3,6 +3,7 @@ import asyncio
 import nest_asyncio
 import aiosqlite
 import uuid
+import math
 from telegram import (
     InlineKeyboardButton, 
     InlineKeyboardMarkup, 
@@ -31,7 +32,18 @@ logger = logging.getLogger(__name__)
 # Constants
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 DATABASE = "users.db"
-GOOGLE_MAPS_API_KEY = "AIzaSyDryjZ3vhkdxaDms_LW1lXqWgnmfegx5Q4"
+
+# Helper function to calculate distance between two coordinates
+def calculate_distance(lat1, lon1, lat2, lon2):
+    # Haversine formula to calculate distance in kilometers
+    R = 6371  # Earth radius in km
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) * math.sin(dlat / 2) + \
+        math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * \
+        math.sin(dlon / 2) * math.sin(dlon / 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
 # Database initialization
 async def init_db():
@@ -162,6 +174,7 @@ async def show_main_menu(update: Update):
 async def show_nearby_users(update: Update, user_id: int):
     try:
         async with aiosqlite.connect(DATABASE) as db:
+            # Get current user's location
             cursor = await db.execute("SELECT lat, lon FROM users WHERE id=?", (user_id,))
             user_loc = await cursor.fetchone()
             
@@ -171,29 +184,40 @@ async def show_nearby_users(update: Update, user_id: int):
 
             user_lat, user_lon = user_loc
 
+            # Get all users with locations
             cursor = await db.execute("""
                 SELECT id, name, lat, lon 
                 FROM users 
                 WHERE id != ? 
                 AND lat IS NOT NULL 
                 AND lon IS NOT NULL
-                ORDER BY (ABS(lat - ?) + ABS(lon - ?))
-                LIMIT 20
-            """, (user_id, user_lat, user_lon))
+            """, (user_id,))
             users = await cursor.fetchall()
 
         if not users:
             await update.message.reply_text("⚠️ لا يوجد مستخدمين قريبين")
             return
 
-        markers = [f"color:red|label:{i+1}|{lat},{lon}" for i, (_, _, lat, lon) in enumerate(users)]
-        map_url = f"https://maps.googleapis.com/maps/api/staticmap?center={user_lat},{user_lon}&zoom=13&size=600x400&maptype=roadmap&key={GOOGLE_MAPS_API_KEY}&" + "&".join(markers)
+        # Calculate distances and sort users
+        nearby_users = []
+        for uid, name, lat, lon in users:
+            distance = calculate_distance(user_lat, user_lon, lat, lon)
+            nearby_users.append((uid, name, distance))
 
-        buttons = [[InlineKeyboardButton(f"{i+1}. {name}", callback_data=f"view_{uid}")] 
-                   for i, (uid, name, _, _) in enumerate(users)]
-        await update.message.reply_photo(
-            photo=map_url,
-            caption="📍 المستخدمين القريبين:",
+        # Sort by distance and limit to 20 users
+        nearby_users.sort(key=lambda x: x[2])
+        nearby_users = nearby_users[:20]
+
+        # Create buttons with distance
+        buttons = []
+        for uid, name, distance in nearby_users:
+            buttons.append([InlineKeyboardButton(
+                f"{name} ({distance:.1f} km)",
+                callback_data=f"view_{uid}"
+            )])
+
+        await update.message.reply_text(
+            "👥 المستخدمين القريبين:",
             reply_markup=InlineKeyboardMarkup(buttons))
     except Exception as e:
         logger.error(f"Nearby users error: {e}")
