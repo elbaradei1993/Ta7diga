@@ -44,6 +44,7 @@ class UserStates:
     REPORT_USER = 6
     FEEDBACK = 7
 
+# Database operations
 async def init_db():
     try:
         async with aiosqlite.connect(DATABASE) as db:
@@ -115,6 +116,7 @@ async def is_user_online(user_id: int) -> bool:
         logger.error(f"Online check failed: {e}")
         return False
 
+# Command handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -145,6 +147,7 @@ async def start_registration(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Registration start error: {e}")
         await update.message.reply_text("❌ فشل في بدء التسجيل")
 
+# Registration workflow
 async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -182,7 +185,6 @@ async def handle_registration(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "اختر تصنيفك:",
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
-            
             context.user_data["state"] = UserStates.REG_TYPE
 
     except Exception as e:
@@ -225,6 +227,17 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Photo handling error: {e}")
         await update.message.reply_text("❌ خطأ في معالجة الصورة")
 
+async def handle_skip_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        context.user_data["photo"] = None
+        await complete_registration(query.message, context)
+        await query.message.delete()
+    except Exception as e:
+        logger.error(f"Skip photo error: {e}")
+        await query.edit_message_text("❌ فشل في تخطي الصورة")
+
 async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -246,6 +259,7 @@ async def complete_registration(update: Update, context: ContextTypes.DEFAULT_TY
         logger.error(f"Registration completion error: {e}")
         await update.message.reply_text("❌ فشل في إكمال التسجيل")
 
+# Main menu and navigation
 async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         keyboard = [
@@ -258,7 +272,6 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "القائمة الرئيسية:",
             reply_markup=InlineKeyboardMarkup(keyboard)
-        )
         
         await request_location(update, context)
         
@@ -276,6 +289,7 @@ async def request_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Location request error: {e}")
 
+# Location handling
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         location = update.message.location
@@ -298,6 +312,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Location handling error: {e}")
         await update.message.reply_text("❌ خطأ في الموقع")
 
+# Nearby users functionality
 async def show_nearby_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
@@ -350,6 +365,7 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
          math.sin(dlon/2) * math.sin(dlon/2))
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
+# Profile viewing
 async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         query = update.callback_query
@@ -389,14 +405,80 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Profile view error: {e}")
         await query.edit_message_text("❌ خطأ في عرض الملف")
 
+# Button handlers
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        await update_user_activity(query.from_user.id)
+
+        if query.data == "skip_photo":
+            await handle_skip_photo(query, context)
+        elif query.data == "edit_profile":
+            await edit_profile_handler(query, context)
+        elif query.data == "report_user":
+            await report_user_handler(query, context)
+        elif query.data == "feedback":
+            await feedback_handler(query, context)
+        elif query.data == "refresh":
+            await refresh_handler(query, context)
+        elif query.data.startswith("type_"):
+            await handle_type_selection(query, context)
+        elif query.data.startswith("view_"):
+            await view_profile(query, context)
+
+    except Exception as e:
+        logger.error(f"Button handling error: {e}")
+        await query.edit_message_text("❌ حدث خطأ غير متوقع")
+
+async def refresh_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        await show_nearby_users(query.message, context)
+    except Exception as e:
+        logger.error(f"Refresh error: {e}")
+        await query.edit_message_text("❌ فشل في التحديث")
+
+async def edit_profile_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        await query.message.reply_text("✨ اختر ما تريد تحديثه:\n1. الاسم\n2. العمر\n3. النبذة\n4. التصنيف")
+        context.user_data["update_stage"] = "choice"
+    except Exception as e:
+        logger.error(f"Edit profile error: {e}")
+        await query.edit_message_text("❌ فشل في بدء التعديل")
+
+async def report_user_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        await query.message.reply_text("📝 الرجاء إدخال معرف المستخدم الذي تريد الإبلاغ عنه:")
+        context.user_data["report_stage"] = "user_id"
+    except Exception as e:
+        logger.error(f"Report user error: {e}")
+        await query.edit_message_text("❌ فشل في بدء الإبلاغ")
+
+async def feedback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        query = update.callback_query
+        await query.answer()
+        await query.message.reply_text("📝 الرجاء كتابة ملاحظاتك أو اقتراحاتك:")
+        context.user_data["feedback_stage"] = "message"
+    except Exception as e:
+        logger.error(f"Feedback error: {e}")
+        await query.edit_message_text("❌ فشل في بدء إرسال الملاحظات")
+
+# Main application
 async def main():
     try:
         await init_db()
         app = ApplicationBuilder().token(BOT_TOKEN).build()
         
+        # Add handlers
         app.add_handler(CommandHandler("start", start))
-        app.add_handler(CallbackQueryHandler(view_profile, pattern=r"^view_\d+$"))
-        app.add_handler(CallbackQueryHandler(handle_type_selection, pattern=r"^type_"))
+        app.add_handler(CallbackQueryHandler(handle_button))
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_registration))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         app.add_handler(MessageHandler(filters.LOCATION, handle_location))
