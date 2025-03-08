@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # Constants
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 DATABASE = "users.db"
-GOOGLE_MAPS_API_KEY = "AIzaSyDryjZ3vhkdxaDms_LW1lXqWgnmfegx5Q4"  # Get from Google Cloud Console
+GOOGLE_MAPS_API_KEY = "AIzaSyDryjZ3vhkdxaDms_LW1lXqWgnmfegx5Q4"
 
 # Database initialization
 async def init_db():
@@ -63,7 +63,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not await cursor.fetchone():
             await register_user(update, context)
             return
-
     await show_main_menu(update)
 
 async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -94,6 +93,42 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("اختر تصنيفك:", reply_markup=InlineKeyboardMarkup(keyboard))
         context.user_data["registration_stage"] = "type"
 
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    # Add type selection handler
+    if query.data.startswith("type_"):
+        selected_type = query.data.split("_")[1]
+        user = query.from_user
+        user_data = context.user_data
+
+        # Save user data to database
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("""INSERT INTO users 
+                              (id, username, name, age, bio, type) 
+                              VALUES (?,?,?,?,?,?)""",
+                              (user.id,
+                               user.username,
+                               user_data.get("name"),
+                               user_data.get("age"),
+                               user_data.get("bio"),
+                               selected_type))
+            await db.commit()
+
+        # Clear registration data and prompt for location
+        context.user_data.clear()
+        await query.message.reply_text("✅ تم التسجيل بنجاح! يرجى مشاركة موقعك الآن.")
+        await show_main_menu(query.message)
+
+    elif query.data.startswith("view_"):
+        user_id = int(query.data.split("_")[1])
+        await show_user_profile(query, user_id)
+
+    elif query.data.startswith("request_"):
+        _, receiver_id, request_id = query.data.split("_")
+        await handle_chat_request(query, receiver_id, request_id)
+
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     location = update.message.location
     user = update.message.from_user
@@ -109,26 +144,21 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_main_menu(update: Update):
     location_button = KeyboardButton("📍 مشاركة الموقع", request_location=True)
     reply_markup = ReplyKeyboardMarkup([[location_button]], resize_keyboard=True)
-    
-    await update.message.reply_text(
-        "اختر خيارًا:",
-        reply_markup=reply_markup
-    )
+    await update.message.reply_text("اختر خيارًا:", reply_markup=reply_markup)
 
 async def show_nearby_users(update: Update, user_id: int):
     async with aiosqlite.connect(DATABASE) as db:
-        # Get current user's location
         cursor = await db.execute("SELECT lat, lon FROM users WHERE id=?", (user_id,))
-        user_lat, user_lon = await cursor.fetchone()
+        user_loc = await cursor.fetchone()
+        if not user_loc:
+            return
 
-        # Find nearby users within 10km radius
+        user_lat, user_lon = user_loc
         cursor = await db.execute("""
             SELECT id, name, lat, lon 
             FROM users 
-            WHERE id != ? 
-            AND lat IS NOT NULL 
-            AND lon IS NOT NULL
-            ORDER BY (ABS(lat - ?) + ABS(lon - ?)) 
+            WHERE id != ? AND lat IS NOT NULL AND lon IS NOT NULL
+            ORDER BY (ABS(lat - ?) + ABS(lon - ?) 
             LIMIT 20
         """, (user_id, user_lat, user_lon))
         users = await cursor.fetchall()
@@ -137,32 +167,12 @@ async def show_nearby_users(update: Update, user_id: int):
         await update.message.reply_text("⚠️ لا يوجد مستخدمين قريبين")
         return
 
-    # Generate static map with markers
     markers = [f"color:red|label:{i+1}|{lat},{lon}" for i, (_, _, lat, lon) in enumerate(users)]
     map_url = f"https://maps.googleapis.com/maps/api/staticmap?center={user_lat},{user_lon}&zoom=13&size=600x400&maptype=roadmap&key={GOOGLE_MAPS_API_KEY}&" + "&".join(markers)
 
-    # Create user selection buttons
-    buttons = []
-    for idx, (uid, name, _, _) in enumerate(users):
-        buttons.append([InlineKeyboardButton(f"{idx+1}. {name}", callback_data=f"view_{uid}")])
-
-    await update.message.reply_photo(
-        photo=map_url,
-        caption="📍 المستخدمين القريبين:",
-        reply_markup=InlineKeyboardMarkup(buttons)
-    )
-
-async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    if query.data.startswith("view_"):
-        user_id = int(query.data.split("_")[1])
-        await show_user_profile(query, user_id)
-
-    elif query.data.startswith("request_"):
-        _, receiver_id, request_id = query.data.split("_")
-        await handle_chat_request(query, receiver_id, request_id)
+    buttons = [[InlineKeyboardButton(f"{i+1}. {name}", callback_data=f"view_{uid}")] 
+               for i, (uid, name, _, _) in enumerate(users)]
+    await update.message.reply_photo(photo=map_url, caption="📍 المستخدمين القريبين:", reply_markup=InlineKeyboardMarkup(buttons))
 
 async def show_user_profile(query: Update, user_id: int):
     async with aiosqlite.connect(DATABASE) as db:
@@ -185,33 +195,30 @@ async def show_user_profile(query: Update, user_id: int):
     )
 
 async def handle_chat_request(query: Update, receiver_id: int, request_id: str):
-    # Notify receiver
     buttons = [
         [InlineKeyboardButton("✅ قبول", callback_data=f"accept_{request_id}")],
         [InlineKeyboardButton("❌ رفض", callback_data=f"reject_{request_id}")]
     ]
-    await context.bot.send_message(
+    await query.message.edit_text("📩 تم إرسال طلب الدردشة، انتظر الموافقة")
+    await query.bot.send_message(
         chat_id=receiver_id,
         text=f"📩 لديك طلب دردشة جديد من {query.from_user.name}",
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-    await query.message.edit_text("📩 تم إرسال طلب الدردشة، انتظر الموافقة")
-
 async def handle_request_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
     action, request_id = query.data.split("_")
+
     async with aiosqlite.connect(DATABASE) as db:
         cursor = await db.execute("SELECT sender_id, receiver_id FROM requests WHERE id=?", (request_id,))
         sender_id, receiver_id = await cursor.fetchone()
 
         if action == "accept":
-            # Create chat link
             await db.execute("UPDATE requests SET status='accepted' WHERE id=?", (request_id,))
-            await context.bot.send_message(
-                chat_id=sender_id,
+            await query.bot.send_message(
+                sender_id,
                 text=f"✅ تم قبول طلب الدردشة! يمكنك البدء بالدردشة مع {query.from_user.name}",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
                     "💬 بدء الدردشة",
@@ -220,14 +227,9 @@ async def handle_request_response(update: Update, context: ContextTypes.DEFAULT_
             )
         else:
             await db.execute("DELETE FROM requests WHERE id=?", (request_id,))
-            await context.bot.send_message(
-                chat_id=sender_id,
-                text="❌ تم رفض طلب الدردشة"
-            )
-
+            await query.bot.send_message(sender_id, "❌ تم رفض طلب الدردشة")
         await db.commit()
 
-# Main application
 async def main():
     await init_db()
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -238,10 +240,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(handle_button))
     app.add_handler(CallbackQueryHandler(handle_request_response, pattern="^(accept|reject)_"))
     
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await asyncio.Event().wait()
+    await app.run_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
