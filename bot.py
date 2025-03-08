@@ -244,6 +244,18 @@ async def resolve_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Resolve report error: {e}")
         await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى.")
 
+# Admin stats command
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.from_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة!")
+        return
+
+    async with aiosqlite.connect(DATABASE) as db:
+        cursor = await db.execute("SELECT COUNT(*) FROM users")
+        count = await cursor.fetchone()
+    
+    await update.message.reply_text(f"📊 إحصائيات البوت:\n\n👥 عدد المستخدمين: {count[0]}")
+
 # Edit profile function
 async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update_user_activity(update.from_user.id)  # Update activity
@@ -494,40 +506,6 @@ async def show_user_profile(query: Update, user_id: int):
     except Exception as e:
         logger.error(f"Profile show error: {e}")
         await query.message.reply_text("❌ حدث خطأ في عرض الملف الشخصي")
-
-# Admin command to view unresolved reports
-async def view_reports(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة!")
-        return
-
-    async with aiosqlite.connect(DATABASE) as db:
-        cursor = await db.execute("SELECT * FROM reports WHERE resolved = FALSE")
-        reports = await cursor.fetchall()
-
-    if not reports:
-        await update.message.reply_text("⚠️ لا توجد تقارير غير محلولة حتى الآن.")
-        return
-
-    report_list = "\n".join([f"📜 التقرير ID: {r[0]}, 👤 المُبلغ: {r[1]}, 🚩 المُبلغ عنه: {r[2]}, 🕒 الوقت: {r[4]}" for r in reports])
-    await update.message.reply_text(f"📜 قائمة التقارير غير المحلولة:\n\n{report_list}")
-
-# Admin command to resolve a report
-async def resolve_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة!")
-        return
-
-    try:
-        report_id = context.args[0]
-        async with aiosqlite.connect(DATABASE) as db:
-            await db.execute("UPDATE reports SET resolved = TRUE WHERE id = ?", (report_id,))
-            await db.commit()
-
-        await update.message.reply_text(f"✅ تم حل التقرير ID: {report_id}.")
-    except Exception as e:
-        logger.error(f"Resolve report error: {e}")
-        await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى.")
 
 # Main function
 async def main():
