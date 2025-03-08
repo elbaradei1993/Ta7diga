@@ -208,7 +208,7 @@ async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT
         context.user_data.clear()
     except Exception as e:
         logger.error(f"Broadcast error: {e}")
-        await update.message.reply_text("❌ حدث خطأ أثناء البث، يرجى المحاولة مرة أخرى.")
+        await update.message.reply_text("❌ حدث خطأ أثنا�� البث، يرجى المحاولة مرة أخرى.")
 
 # Admin command to view unresolved reports
 async def view_reports(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -385,9 +385,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await db.execute("UPDATE users SET photo=? WHERE id=?", 
                                (photo_file.file_id, update.message.from_user.id))
                 await db.commit()
+            
+            # Clear the registration stage
+            context.user_data.clear()
+            
+            # Prompt the user to share their location
             await update.message.reply_text("✅ تم حفظ صورتك بنجاح! يرجى مشاركة موقعك الآن.")
             await show_main_menu(update.message)
-            context.user_data.clear()
     except Exception as e:
         logger.error(f"Photo handling error: {e}")
         await update.message.reply_text("❌ حدث خطأ في حفظ الصورة")
