@@ -509,6 +509,7 @@ async def show_user_profile(query: Update, user_id: int):
             photo=user[4] if user[4] else "https://via.placeholder.com/200",
             caption=caption,
             reply_markup=InlineKeyboardMarkup(buttons)
+        )  # Fixed missing closing parenthesis
     except Exception as e:
         logger.error(f"Profile show error: {e}")
         await query.edit_message_text("❌ حدث خطأ في عرض الملف الشخصي")
