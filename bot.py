@@ -60,12 +60,6 @@ async def init_db():
             lon REAL,
             photo TEXT
         )""")
-        await db.execute("""CREATE TABLE IF NOT EXISTS requests (
-            id TEXT PRIMARY KEY,
-            sender_id INTEGER,
-            receiver_id INTEGER,
-            status TEXT
-        )""")
         await db.commit()
 
 # Start command handler
@@ -103,7 +97,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif stage == "bio":
             context.user_data["bio"] = text
             keyboard = [[InlineKeyboardButton(t, callback_data=f"type_{t}")] 
-                       for t in ["فرع", "حلوة", "برغل"]]
+                       for t in ["فرع", "حلوة", "منجة", "برغل"]]
             await update.message.reply_text("اختر تصنيفك:", reply_markup=InlineKeyboardMarkup(keyboard))
             context.user_data["registration_stage"] = "type"
     except Exception as e:
@@ -139,12 +133,6 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif query.data.startswith("view_"):
             user_id = int(query.data.split("_")[1])
             await show_user_profile(query, user_id)
-
-        elif query.data.startswith("request_"):
-            parts = query.data.split("_")
-            receiver_id = int(parts[1])
-            request_id = parts[2]
-            await handle_chat_request(query, receiver_id, request_id, context)
 
     except Exception as e:
         logger.error(f"Button handling error: {e}")
@@ -233,13 +221,11 @@ async def show_user_profile(query: Update, user_id: int):
             cursor = await db.execute("SELECT name, age, bio, photo FROM users WHERE id=?", (user_id,))
             user = await cursor.fetchone()
 
-        request_id = str(uuid.uuid4())
-        buttons = [[InlineKeyboardButton("💌 إرسال رسالة", callback_data=f"request_{user_id}_{request_id}")]]
-
-        async with aiosqlite.connect(DATABASE) as db:
-            await db.execute("INSERT INTO requests VALUES (?, ?, ?, 'pending')", 
-                            (request_id, query.from_user.id, user_id))
-            await db.commit()
+        # Direct chat button using native Telegram URL
+        buttons = [[InlineKeyboardButton(
+            "💌 إرسال رسالة", 
+            url=f"tg://user?id={user_id}"
+        )]]
 
         caption = f"👤 الاسم: {user[0]}\n📅 العمر: {user[1]}\n📝 النبذة: {user[2]}"
         await query.message.reply_photo(
@@ -250,74 +236,6 @@ async def show_user_profile(query: Update, user_id: int):
         logger.error(f"Profile show error: {e}")
         await query.message.reply_text("❌ حدث خطأ في عرض الملف الشخصي")
 
-async def handle_chat_request(query: Update, receiver_id: int, request_id: str, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        # Get sender info from callback query
-        sender = query.from_user
-        buttons = [
-            [InlineKeyboardButton("✅ قبول", callback_data=f"accept_{request_id}")],
-            [InlineKeyboardButton("❌ رفض", callback_data=f"reject_{request_id}")]
-        ]
-        
-        # Edit original message
-        await query.edit_message_text("📩 تم إرسال طلب الدردشة، انتظر الموافقة")
-        
-        # Send request to receiver
-        await context.bot.send_message(
-            chat_id=receiver_id,
-            text=f"📩 لديك طلب دردشة جديد من {sender.first_name}",
-            reply_markup=InlineKeyboardMarkup(buttons)
-        )
-
-    except Exception as e:
-        logger.error(f"Chat request error: {e}")
-        await query.message.reply_text("❌ فشل إرسال طلب الدردشة")
-
-async def handle_request_response(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        query = update.callback_query
-        await query.answer()
-        action, request_id = query.data.split("_")
-
-        async with aiosqlite.connect(DATABASE) as db:
-            # Get request details
-            cursor = await db.execute(
-                "SELECT sender_id, receiver_id FROM requests WHERE id=?",
-                (request_id,)
-            )
-            sender_id, receiver_id = await cursor.fetchone()
-
-            if action == "accept":
-                # Create direct chat link
-                await db.execute(
-                    "UPDATE requests SET status='accepted' WHERE id=?",
-                    (request_id,)
-                )
-                await context.bot.send_message(
-                    sender_id,
-                    text=f"✅ تم قبول طلب الدردشة! يمكنك البدء بالدردشة مع {query.from_user.first_name}",
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton(
-                            "💬 بدء الدردشة",
-                            url=f"tg://user?id={receiver_id}"
-                        )
-                    ]])
-                )
-            else:
-                await db.execute(
-                    "DELETE FROM requests WHERE id=?",
-                    (request_id,)
-                )
-                await context.bot.send_message(
-                    sender_id,
-                    "❌ تم رفض طلب الدردشة"
-                )
-            await db.commit()
-
-    except Exception as e:
-        logger.error(f"Request response error: {e}")
-        await query.message.reply_text("❌ فشل معالجة الطلب")
-
 async def main():
     await init_db()
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -326,7 +244,6 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.LOCATION, handle_location))
     app.add_handler(CallbackQueryHandler(handle_button))
-    app.add_handler(CallbackQueryHandler(handle_request_response, pattern="^(accept|reject)_"))
     
     await app.run_polling()
 
