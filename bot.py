@@ -35,7 +35,7 @@ DATABASE = "users.db"
 ADMIN_ID = 1796978458
 PHOTO_PROMPT = "📸 يرجى إرسال صورة شخصية (اختياري):\n(يمكنك تخطي هذا الخطوة بالضغط على الزر أدناه)"
 SKIP_PHOTO_BUTTON = [[InlineKeyboardButton("تخطي الصورة", callback_data="skip_photo")]]
-MAX_PHOTO_SIZE = 50_000_000  # 50MB
+MAX_PHOTO_SIZE = 5_000_000  # 5MB
 
 # Helper functions
 def calculate_distance(lat1, lon1, lat2, lon2):
@@ -169,6 +169,16 @@ async def delete_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Account deletion failed: {e}")
         await update.message.reply_text("❌ فشل في حذف الحساب")
+
+async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    try:
+        await update_user_activity(update.message.from_user.id)
+        context.user_data.clear()
+        await update.message.reply_text("✨ اختر ما تريد تحديثه:\n\n1. الاسم\n2. العمر\n3. النبذة\n4. التصنيف")
+        context.user_data["update_stage"] = "choice"
+    except Exception as e:
+        logger.error(f"Profile edit init failed: {e}")
+        await update.message.reply_text("❌ فشل في بدء تحديث الملف الشخصي")
 
 # **************************************
 # CALLBACK HANDLERS
