@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # Constants
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"  # Replace with your bot token
 DATABASE = "users.db"
-ADMIN_ID = 1796978458  # Replace with your Telegram user ID for admin features
+ADMIN_ID = 123456789  # Replace with your Telegram user ID for admin features
 PHOTO_PROMPT = "📸 يرجى إرسال صورة شخصية (اختياري):\n(يمكنك تخطي هذا الخطوة بالضغط على الزر أدناه)"
 SKIP_PHOTO_BUTTON = [[InlineKeyboardButton("تخطي الصورة", callback_data="skip_photo")]]
 
@@ -50,42 +50,49 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 
 # Database initialization
 async def init_db():
-    async with aiosqlite.connect(DATABASE) as db:
-        await db.execute("""CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
-            username TEXT,
-            name TEXT,
-            age INTEGER,
-            bio TEXT,
-            type TEXT,
-            lat REAL,
-            lon REAL,
-            photo TEXT
-        )""")
-        await db.commit()
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("""CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT,
+                name TEXT,
+                age INTEGER,
+                bio TEXT,
+                type TEXT,
+                lat REAL,
+                lon REAL,
+                photo TEXT
+            )""")
+            await db.commit()
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
 
 # Start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.message.from_user
-    async with aiosqlite.connect(DATABASE) as db:
-        cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
-        user_data = await cursor.fetchone()
+    try:
+        user = update.message.from_user
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
+            user_data = await cursor.fetchone()
 
-    # Create inline buttons for the commands
-    keyboard = [
-        [InlineKeyboardButton("🛟 المساعدة", callback_data="help_command")],
-        [InlineKeyboardButton("🗑️ حذف الحساب", callback_data="delete_account")],
-        [InlineKeyboardButton("📝 إنشاء/تحديث الملف الشخصي", callback_data="edit_profile")],
-        [InlineKeyboardButton("🚨 الإبلاغ عن مستخدم", callback_data="report_user")],
-        [InlineKeyboardButton("📩 إرسال ملاحظات", callback_data="feedback")],
-        [InlineKeyboardButton("📍 مشاركة الموقع", callback_data="share_location")]
-    ]
+        # Create inline buttons for the commands
+        keyboard = [
+            [InlineKeyboardButton("🛟 المساعدة", callback_data="help_command")],
+            [InlineKeyboardButton("🗑️ حذف الحساب", callback_data="delete_account")],
+            [InlineKeyboardButton("📝 إنشاء/تحديث الملف الشخصي", callback_data="edit_profile")],
+            [InlineKeyboardButton("🚨 الإبلاغ عن مستخدم", callback_data="report_user")],
+            [InlineKeyboardButton("📩 إرسال ملاحظات", callback_data="feedback")],
+            [InlineKeyboardButton("📍 مشاركة الموقع", callback_data="share_location")]
+        ]
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(
-        "✨ مرحبا! اختر أحد الخيارات التالية:",
-        reply_markup=reply_markup
-    )
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        await update.message.reply_text(
+            "✨ مرحبا! اختر أحد الخيارات التالية:",
+            reply_markup=reply_markup
+        )
+    except Exception as e:
+        logger.error(f"Start command error: {e}")
+        await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Handle button clicks
 async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -146,27 +153,35 @@ async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Edit profile function
 async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.from_user
-    async with aiosqlite.connect(DATABASE) as db:
-        cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
-        user_data = await cursor.fetchone()
+    try:
+        user = update.from_user
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
+            user_data = await cursor.fetchone()
 
-    if user_data:
-        # If the user already has a profile, allow them to update it
-        await update.reply_text("✨ اختر ما تريد تحديثه:\n\n"
-                              "1. الاسم\n"
-                              "2. العمر\n"
-                              "3. النبذة\n"
-                              "4. التصنيف")
-        context.user_data["update_stage"] = "choice"
-    else:
-        # If the user doesn't have a profile, start the registration process
-        await register_user(update, context)
+        if user_data:
+            # If the user already has a profile, allow them to update it
+            await update.reply_text("✨ اختر ما تريد تحديثه:\n\n"
+                                  "1. الاسم\n"
+                                  "2. العمر\n"
+                                  "3. النبذة\n"
+                                  "4. التصنيف")
+            context.user_data["update_stage"] = "choice"
+        else:
+            # If the user doesn't have a profile, start the registration process
+            await register_user(update, context)
+    except Exception as e:
+        logger.error(f"Edit profile error: {e}")
+        await update.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Register user function
 async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.reply_text("✨ مرحبا! سجل نفسك أولا\nأدخل اسمك:")
-    context.user_data["registration_stage"] = "name"
+    try:
+        await update.reply_text("✨ مرحبا! سجل نفسك أولا\nأدخل اسمك:")
+        context.user_data["registration_stage"] = "name"
+    except Exception as e:
+        logger.error(f"Register user error: {e}")
+        await update.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Handle messages during registration or profile update
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -328,56 +343,80 @@ async def show_user_profile(query: Update, user_id: int):
 
 # Admin stats command
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة!")
-        return
-    
-    async with aiosqlite.connect(DATABASE) as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM users")
-        count = await cursor.fetchone()
-    
-    await update.message.reply_text(f"📊 إحصائيات البوت:\n\n👥 عدد المستخدمين: {count[0]}")
+    try:
+        if update.message.from_user.id != ADMIN_ID:
+            await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة!")
+            return
+        
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT COUNT(*) FROM users")
+            count = await cursor.fetchone()
+        
+        await update.message.reply_text(f"📊 إحصائيات البوت:\n\n👥 عدد المستخدمين: {count[0]}")
+    except Exception as e:
+        logger.error(f"Stats command error: {e}")
+        await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = (
-        "🛟 *كيفية استخدام البوت:*\n\n"
-        "1. ابدأ بتسجيل بياناتك باستخدام الأمر /start.\n"
-        "2. شارك موقعك لرؤية المستخدمين القريبين.\n"
-        "3. تصفح ملفات المستخدمين القريبين وابدأ المحادثات.\n"
-        "4. استخدم /update لتحديث ملفك الشخصي.\n"
-        "5. استخدم /delete لحذف حسابك.\n"
-        "6. استخدم /report للإبلاغ عن مستخدم.\n"
-        "7. استخدم /feedback لإرسال ملاحظاتك.\n\n"
-        "📌 يمكنك تحديث قائمة المستخدمين القريبين باستخدام زر '🔄 تحديث'."
-    )
-    await update.reply_text(help_text, parse_mode="Markdown")
+    try:
+        help_text = (
+            "🛟 *كيفية استخدام البوت:*\n\n"
+            "1. ابدأ بتسجيل بياناتك باستخدام الأمر /start.\n"
+            "2. شارك موقعك لرؤية المستخدمين القريبين.\n"
+            "3. تصفح ملفات المستخدمين القريبين وابدأ المحادثات.\n"
+            "4. استخدم /update لتحديث ملفك الشخصي.\n"
+            "5. استخدم /delete لحذف حسابك.\n"
+            "6. استخدم /report للإبلاغ عن مستخدم.\n"
+            "7. استخدم /feedback لإرسال ملاحظاتك.\n\n"
+            "📌 يمكنك تحديث قائمة المستخدمين القريبين باستخدام زر '🔄 تحديث'."
+        )
+        await update.reply_text(help_text, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Help command error: {e}")
+        await update.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Delete account command
 async def delete_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.from_user
-    async with aiosqlite.connect(DATABASE) as db:
-        await db.execute("DELETE FROM users WHERE id=?", (user.id,))
-        await db.commit()
-    await update.reply_text("✅ تم حذف حسابك بنجاح!")
+    try:
+        user = update.from_user
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("DELETE FROM users WHERE id=?", (user.id,))
+            await db.commit()
+        await update.reply_text("✅ تم حذف حسابك بنجاح!")
+    except Exception as e:
+        logger.error(f"Delete account error: {e}")
+        await update.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Report user command
 async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.reply_text("📝 الرجاء إدخال معرف المستخدم الذي تريد الإبلاغ عنه:")
-    context.user_data["report_stage"] = "user_id"
+    try:
+        await update.reply_text("📝 الرجاء إدخال معرف المستخدم الذي تريد الإبلاغ عنه:")
+        context.user_data["report_stage"] = "user_id"
+    except Exception as e:
+        logger.error(f"Report user error: {e}")
+        await update.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Feedback command
 async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.reply_text("📝 الرجاء إدخال ملاحظاتك أو اقتراحاتك:")
-    context.user_data["feedback_stage"] = "message"
+    try:
+        await update.reply_text("📝 الرجاء إدخال ملاحظاتك أو اقتراحاتك:")
+        context.user_data["feedback_stage"] = "message"
+    except Exception as e:
+        logger.error(f"Feedback command error: {e}")
+        await update.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Broadcast command (Admin Only)
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.message.from_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ ليس لديك صلاحية استخدام هذا الأمر.")
-        return
-    await update.message.reply_text("📢 الرجاء إدخال الرسالة التي تريد بثها:")
-    context.user_data["broadcast_stage"] = "message"
+    try:
+        if update.message.from_user.id != ADMIN_ID:
+            await update.message.reply_text("❌ ليس لديك صلاحية استخدام هذا الأمر.")
+            return
+        await update.message.reply_text("📢 الرجاء إدخال الرسالة التي تريد بثها:")
+        context.user_data["broadcast_stage"] = "message"
+    except Exception as e:
+        logger.error(f"Broadcast command error: {e}")
+        await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
 # Handle broadcast messages
 async def handle_broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
