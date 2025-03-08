@@ -30,22 +30,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants
-BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
+BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"  # Replace with your bot token
 DATABASE = "users.db"
-ADMIN_ID = 123456789
+ADMIN_ID = 123456789  # Replace with your Telegram user ID for admin features
 PHOTO_PROMPT = "📸 يرجى إرسال صورة شخصية (اختياري):\n(يمكنك تخطي هذا الخطوة بالضغط على الزر أدناه)"
 SKIP_PHOTO_BUTTON = [[InlineKeyboardButton("تخطي الصورة", callback_data="skip_photo")]]
 MAX_PHOTO_SIZE = 5_000_000  # 5MB
 
-# Helper functions
+# Helper function to calculate distance between two coordinates
 def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371
+    R = 6371  # Earth radius in km
     dlat = math.radians(lat2 - lat1)
     dlon = math.radians(lon2 - lon1)
-    a = (math.sin(dlat/2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon/2)**2
-    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1))
+        * math.cos(math.radians(lat2))
+        * math.sin(dlon / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
 
-# Database operations
+# Database initialization
 async def init_db():
     try:
         async with aiosqlite.connect(DATABASE) as db:
@@ -79,6 +85,7 @@ async def init_db():
         logger.error(f"Database initialization failed: {e}")
         raise
 
+# Update user activity
 async def update_user_activity(user_id: int):
     try:
         async with aiosqlite.connect(DATABASE) as db:
@@ -87,6 +94,7 @@ async def update_user_activity(user_id: int):
     except Exception as e:
         logger.error(f"Activity update failed for user {user_id}: {e}")
 
+# Check if a user is online
 async def is_user_online(user_id: int) -> bool:
     try:
         async with aiosqlite.connect(DATABASE) as db:
@@ -102,7 +110,7 @@ async def is_user_online(user_id: int) -> bool:
         logger.error(f"Online check failed for user {user_id}: {e}")
         return False
 
-# Command handlers
+# Start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     try:
@@ -132,6 +140,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Start command error: {e}")
         await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
+# Help command
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await update_user_activity(update.message.from_user.id)
@@ -160,6 +169,7 @@ async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Registration start error: {e}")
         await update.message.reply_text("❌ حدث خطأ، يرجى المحاولة مرة أخرى")
 
+# Handle messages during registration or profile update
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await update_user_activity(update.message.from_user.id)
@@ -175,7 +185,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data["registration_stage"] = "age"
 
         elif user_data.get("registration_stage") == "age":
-            if not text.isdigit() or not (13 <= int(text) <= 100:
+            if not text.isdigit() or not (13 <= int(text) <= 100):
                 await update.message.reply_text("❌ يرجى إدخال عمر صحيح بين 13 و 100 سنة!")
                 return
             user_data["age"] = int(text)
@@ -262,6 +272,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Photo handling error: {e}")
         await update.message.reply_text("❌ حدث خطأ في حفظ الصورة")
 
+# Handle location sharing
 async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await update_user_activity(update.message.from_user.id)
@@ -280,7 +291,7 @@ async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Location handling error: {e}")
         await update.message.reply_text("❌ حدث خطأ في حفظ الموقع")
 
-# UI components
+# Show main menu
 async def show_main_menu(update: Update):
     try:
         location_button = KeyboardButton("📍 مشاركة الموقع", request_location=True)
@@ -293,6 +304,7 @@ async def show_main_menu(update: Update):
     except Exception as e:
         logger.error(f"Main menu error: {e}")
 
+# Show nearby users
 async def show_nearby_users(update: Update, user_id: int):
     try:
         async with aiosqlite.connect(DATABASE) as db:
@@ -338,83 +350,6 @@ async def show_nearby_users(update: Update, user_id: int):
     except Exception as e:
         logger.error(f"Nearby users error: {e}")
         await update.message.reply_text("❌ حدث خطأ في عرض المستخدمين القريبين")
-
-async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        query = update.callback_query
-        await query.answer()
-        await update_user_activity(query.from_user.id)
-
-        if query.data == "help_command":
-            await help_command(query.message, context)
-        elif query.data == "delete_account":
-            await delete_account_handler(query)
-        elif query.data == "edit_profile":
-            await edit_profile_handler(query, context)
-        elif query.data == "report_user":
-            await report_user_handler(query, context)
-        elif query.data == "feedback":
-            await feedback_handler(query, context)
-        elif query.data == "share_location":
-            await show_main_menu(query)
-        elif query.data.startswith("type_"):
-            await handle_type_selection(query, context)
-        elif query.data == "skip_photo":
-            await handle_skip_photo(query, context)
-        elif query.data.startswith("view_"):
-            await handle_profile_view(query)
-
-    except Exception as e:
-        logger.error(f"Button handling error: {e}")
-        await query.edit_message_text("❌ حدث خطأ غير متوقع")
-
-# Button handlers
-async def delete_account_handler(query):
-    try:
-        async with aiosqlite.connect(DATABASE) as db:
-            await db.execute("DELETE FROM users WHERE id=?", (query.from_user.id,))
-            await db.commit()
-        await query.edit_message_text("✅ تم حذف حسابك بنجاح!")
-    except Exception as e:
-        logger.error(f"Account deletion failed: {e}")
-        await query.edit_message_text("❌ فشل في حذف الحساب")
-
-async def edit_profile_handler(query, context):
-    context.user_data.clear()
-    try:
-        await query.edit_message_text("✨ اختر ما تريد تحديثه:\n\n1. الاسم\n2. العمر\n3. النبذة\n4. التصنيف")
-        context.user_data["update_stage"] = "choice"
-    except Exception as e:
-        logger.error(f"Profile edit init failed: {e}")
-
-async def handle_type_selection(query, context):
-    selected_type = query.data.split("_")[1]
-    try:
-        async with aiosqlite.connect(DATABASE) as db:
-            await db.execute("UPDATE users SET type=? WHERE id=?", 
-                           (selected_type, query.from_user.id))
-            await db.commit()
-        await query.edit_message_text(
-            PHOTO_PROMPT,
-            reply_markup=InlineKeyboardMarkup(SKIP_PHOTO_BUTTON)
-        )
-        context.user_data["registration_stage"] = "photo"
-    except Exception as e:
-        logger.error(f"Type update failed: {e}")
-        await query.edit_message_text("❌ فشل في تحديث التصنيف")
-
-async def handle_skip_photo(query, context):
-    context.user_data.pop("registration_stage", None)
-    await query.edit_message_text("✅ يمكنك الآن مشاركة موقعك!")
-    await show_main_menu(query)
-
-# Error handling
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Error: {context.error}", exc_info=True)
-    if update and update.callback_query:
-        await update.callback_query.answer("❌ حدث خطأ غير متوقع")
-    elif update and update.message:
-        await update.message.reply_text("❌ حدث خطأ غير متوقع")
 
 # Main application
 async def main():
