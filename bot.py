@@ -55,7 +55,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "مرحبًا بك! 🏳️‍🌈\n"
         "قم بإنشاء ملفك الشخصي باستخدام الأمر /register.\n"
-        "يمكنك البحث عن مستخدمين قريبين منك باستخدام الأمر /search."
+        "يمكنك البحث عن مستخدمين قريبين منك باستخدام الأمر /search.\n"
+        "لعرض ملفك الشخصي استخدم الأمر /profile."
     )
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -130,6 +131,17 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await search(update, context)
     return ConversationHandler.END
 
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    async with aiosqlite.connect(DATABASE) as db:
+        async with db.execute("SELECT username, name, age, bio, type, photo FROM users WHERE id = ?", (update.message.from_user.id,)) as cursor:
+            result = await cursor.fetchone()
+            if result:
+                username, name, age, bio, user_type, photo = result
+                profile_text = f"👤 الاسم: {name}\n📅 العمر: {age}\n🖋️ السيرة الذاتية: {bio}\n🔄 النوع: {user_type}"
+                await update.message.reply_photo(photo, caption=profile_text)
+            else:
+                await update.message.reply_text("❌ لم يتم العثور على ملفك الشخصي. استخدم /register لإنشاء ملف جديد.")
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("❌ تم إلغاء التسجيل.")
     return ConversationHandler.END
@@ -157,6 +169,7 @@ async def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("search", search))
+    app.add_handler(CommandHandler("profile", profile))
     app.add_handler(register_handler)
     app.add_error_handler(error_handler)
 
