@@ -172,6 +172,7 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         photo_file = update.message.photo[-1].file_id
         context.user_data['photo'] = photo_file
 
+        # Save user data to the database
         async with aiosqlite.connect(DATABASE) as db:
             await db.execute(
                 "INSERT OR REPLACE INTO users (id, username, name, age, bio, type, location, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -187,14 +188,17 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             await db.commit()
 
         await update.message.reply_text("✅ تم التسجيل بنجاح!")
+
+        # Automatically show nearby profiles after registration
+        await show_nearby_profiles(update, context)
         return ConversationHandler.END
     except Exception as e:
         logger.error(f"Error in set_photo: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء التسجيل. الرجاء المحاولة مرة أخرى.")
         return ConversationHandler.END
 
-# Search command
-async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+# Show nearby profiles
+async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_location = context.user_data.get('location')
     if not user_location:
         await update.message.reply_text("❗ الرجاء التسجيل أولاً باستخدام /register لتحديد موقعك.")
@@ -203,24 +207,36 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_coords = tuple(map(float, user_location.split(',')))
     try:
         async with aiosqlite.connect(DATABASE) as db:
-            async with db.execute("SELECT * FROM users") as cursor:
-                keyboard = []
+            async with db.execute("SELECT * FROM users WHERE id != ?", (update.message.from_user.id,)) as cursor:
+                profiles = []
                 async for row in cursor:
                     profile_coords = tuple(map(float, row[6].split(',')))
                     distance = geodesic(user_coords, profile_coords).km
-                    if distance <= 50:
-                        keyboard.append([
-                            InlineKeyboardButton(f"{row[2]}, {row[3]} سنة - {row[5]}",
-                                                callback_data=f"profile_{row[0]}")
-                        ])
+                    profiles.append({
+                        "id": row[0],
+                        "name": row[2],
+                        "age": row[3],
+                        "type": row[5],
+                        "distance": distance
+                    })
+
+                # Sort profiles by distance (nearest to farthest)
+                profiles.sort(key=lambda x: x['distance'])
+
+                # Create buttons for nearby profiles
+                keyboard = []
+                for profile in profiles:
+                    if profile['distance'] <= 50:  # Only show profiles within 50 km
+                        button_text = f"{profile['name']}, {profile['age']} سنة - {profile['type']} ({round(profile['distance'], 1)} كم)"
+                        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"profile_{profile['id']}")])
 
                 if keyboard:
                     reply_markup = InlineKeyboardMarkup(keyboard)
-                    await update.message.reply_text("🔍 المستخدمون القريبون:", reply_markup=reply_markup)
+                    await update.message.reply_text("🔍 المستخدمون القريبون منك:", reply_markup=reply_markup)
                 else:
                     await update.message.reply_text("😔 لم يتم العثور على ملفات قريبة.")
     except Exception as e:
-        logger.error(f"Error in search: {e}")
+        logger.error(f"Error in show_nearby_profiles: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء البحث. الرجاء المحاولة مرة أخرى.")
 
 # Main function
@@ -245,7 +261,7 @@ def main() -> None:
     # Add handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(conv_handler)
-    application.add_handler(CommandHandler('search', search))
+    application.add_handler(CommandHandler('search', show_nearby_profiles))
 
     # Run the bot
     application.run_polling()
