@@ -47,6 +47,13 @@ async def init_db():
         )
         await db.commit()
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "مرحبًا بك! 🏳️‍🌈\n"
+        "قم بإنشاء ملفك الشخصي باستخدام الأمر /profile.\n"
+        "يمكنك البحث عن مستخدمين قريبين منك باستخدام الأمر /search."
+    )
+
 async def ask_for_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
         [InlineKeyboardButton("سالب", callback_data="type_salb")],
@@ -106,11 +113,9 @@ async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("profile", profile))
+    app.add_handler(CommandHandler("profile", ask_for_type))
     app.add_handler(CommandHandler("search", search))
-    app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
     app.add_handler(CallbackQueryHandler(type_selection, pattern="^type_"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, profile))
 
     await app.bot.delete_webhook(drop_pending_updates=True)
     await app.run_polling()
