@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 # Configuration (use environment variables for sensitive data)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # Replace with your bot token
 DATABASE = os.getenv("DATABASE", "users.db")  # Database file
-ADMINS = [1796978458]  # List of admin user IDs
+ADMIN_ID = 1796978458  # Admin user ID
 
 # Registration steps
 USERNAME, NAME, AGE, BIO, TYPE, LOCATION, PHOTO = range(7)
@@ -52,7 +52,8 @@ async def init_db():
                     bio TEXT,
                     type TEXT,
                     location TEXT,
-                    photo TEXT
+                    photo TEXT,
+                    banned INTEGER DEFAULT 0
                 )"""
             )
             await db.commit()
@@ -60,18 +61,24 @@ async def init_db():
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
 
-# Start command
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "أهلاً بك! 🌍\n"
-        "قم بإنشاء ملفك الشخصي باستخدام /register.\n"
-        "للبحث عن المستخدمين القريبين استخدم /search.\n"
-        "لعرض ملفك الشخصي استخدم /profile."
-    )
+# Start command (starts registration directly)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.message.from_user.id
+    logger.info(f"User {user_id} started registration.")
 
-# Register command
-async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    logger.info(f"User {update.message.from_user.id} started registration.")
+    # Check if the user is already registered
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+            existing_user = await cursor.fetchone()
+            if existing_user:
+                await update.message.reply_text("✅ أنت مسجل بالفعل! استخدم /search للبحث عن مستخدمين قريبين.")
+                return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error checking user registration: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء التحقق من التسجيل. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
     await update.message.reply_text("📝 بدأت عملية التسجيل!\nالرجاء إرسال اسم المستخدم الخاص بك:")
     return USERNAME
 
@@ -205,13 +212,13 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_location = context.user_data.get('location')
     if not user_location:
-        await update.message.reply_text("❗ الرجاء التسجيل أولاً باستخدام /register لتحديد موقعك.")
+        await update.message.reply_text("❗ الرجاء التسجيل أولاً باستخدام /start لتحديد موقعك.")
         return
 
     user_coords = tuple(map(float, user_location.split(',')))
     try:
         async with aiosqlite.connect(DATABASE) as db:
-            async with db.execute("SELECT * FROM users WHERE id != ?", (update.message.from_user.id,)) as cursor:
+            async with db.execute("SELECT * FROM users WHERE id != ? AND banned = 0", (update.message.from_user.id,)) as cursor:
                 profiles = []
                 async for row in cursor:
                     profile_coords = tuple(map(float, row[6].split(',')))
@@ -243,13 +250,52 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.error(f"Error in show_nearby_profiles: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء البحث. الرجاء المحاولة مرة أخرى.")
 
+# Admin panel command
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى لوحة التحكم.")
+        return
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            async with db.execute("SELECT * FROM users WHERE banned = 0") as cursor:
+                keyboard = []
+                async for row in cursor:
+                    button_text = f"{row[2]}, {row[3]} سنة - {row[5]} ({row[6]})"
+                    keyboard.append([InlineKeyboardButton(button_text, callback_data=f"ban_{row[0]}")])
+
+                if keyboard:
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await update.message.reply_text("👤 المستخدمون المسجلون:", reply_markup=reply_markup)
+                else:
+                    await update.message.reply_text("😔 لا يوجد مستخدمون مسجلون.")
+    except Exception as e:
+        logger.error(f"Error in admin_panel: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحميل لوحة التحكم. الرجاء المحاولة مرة أخرى.")
+
+# Ban user callback
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[1])  # Extract user ID from callback data
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET banned = 1 WHERE id = ?", (user_id,))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم حظر المستخدم بنجاح.")
+    except Exception as e:
+        logger.error(f"Error banning user: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء حظر المستخدم. الرجاء المحاولة مرة أخرى.")
+
 # Main function
 def main() -> None:
     application = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Conversation handler
+    # Conversation handler for registration
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('register', register)],
+        entry_points=[CommandHandler('start', start)],
         states={
             USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)],
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
@@ -263,9 +309,10 @@ def main() -> None:
     )
 
     # Add handlers
-    application.add_handler(CommandHandler('start', start))
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
+    application.add_handler(CommandHandler('admin', admin_panel))
+    application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
 
     # Run the bot
     application.run_polling()
