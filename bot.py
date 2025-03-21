@@ -53,7 +53,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if not result:
         await update.message.reply_text("🔹 **يرجى التسجيل أولًا.**")
-        await register_user(update, context)
+        await ask_registration_details(update, context)
         return
 
     keyboard = [
@@ -71,9 +71,44 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("🌟 **مرحبًا بك في تحديقة!** اختر من القائمة:", reply_markup=reply_markup)
 
-async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("📸 يرجى إرسال صورتك الشخصية أو الضغط على زر التخطي.", 
-                                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("تخطي", callback_data="skip_photo")]]))
+async def ask_registration_details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("👤 ما اسمك؟")
+    context.user_data['register_step'] = 'name'
+
+async def registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.message.from_user
+    text = update.message.text
+    step = context.user_data.get('register_step')
+
+    if step == 'name':
+        context.user_data['name'] = text
+        await update.message.reply_text("📅 كم عمرك؟")
+        context.user_data['register_step'] = 'age'
+    elif step == 'age':
+        context.user_data['age'] = text
+        await update.message.reply_text("💬 اكتب نبذة قصيرة عنك.")
+        context.user_data['register_step'] = 'bio'
+    elif step == 'bio':
+        context.user_data['bio'] = text
+        keyboard = [
+            [InlineKeyboardButton("سالب", callback_data="type_bottom")],
+            [InlineKeyboardButton("موجب", callback_data="type_top")],
+            [InlineKeyboardButton("مبادل", callback_data="type_switch")]
+        ]
+        await update.message.reply_text("🌐 اختر نوعك:", reply_markup=InlineKeyboardMarkup(keyboard))
+        context.user_data['register_step'] = 'type'
+    elif step == 'photo':
+        context.user_data['photo'] = text
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("""
+                INSERT INTO users (id, username, name, age, bio, type, location, photo, tribes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user.id, user.username, context.user_data['name'],
+                   context.user_data['age'], context.user_data['bio'],
+                   context.user_data['type'], None, context.user_data['photo'], None))
+            await db.commit()
+
+        await update.message.reply_text("✅ تم إنشاء ملفك الشخصي بنجاح!")
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
@@ -86,8 +121,8 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
                         f"👤 الاسم: {profile_data[2]}\n"
                         f"📅 العمر: {profile_data[3]}\n"
                         f"💬 نبذة: {profile_data[4]}\n"
-                        f"📍 الموقع: {profile_data[6]}\n"
-                        f"🌐 النوع: {profile_data[5]}\n")
+                        f"🌐 النوع: {profile_data[5]}\n"
+                        f"📍 الموقع: {profile_data[6]}\n")
         await update.message.reply_text(profile_text)
     else:
         await update.message.reply_text("❌ لم يتم العثور على ملفك الشخصي.")
@@ -109,7 +144,7 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("profile", profile))
     app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
-    app.add_handler(CallbackQueryHandler(register_user, pattern="^skip_photo$"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, registration_handler))
 
     await app.bot.delete_webhook(drop_pending_updates=True)
     await app.run_polling()
