@@ -63,33 +63,25 @@ async def init_db():
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
 
-# Start command (displays privacy note and starts registration)
+# Start command (starts registration directly)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.message.from_user.id
     logger.info(f"User {user_id} started registration.")
 
-    # Display the privacy note
-    privacy_note = (
-        "نود إعلامك أننا نحرص على حماية خصوصيتك باستخدام أفضل تقنيات التشفير والتخزين الآمن. "
-        "لن يتم مشاركة بياناتك مع أي أطراف خارجية.\n\n"
-        "اضغط على الزر أدناه لبدء التسجيل."
-    )
+    # Check if the user is already registered
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT id FROM users WHERE id = ?", (user_id,))
+            existing_user = await cursor.fetchone()
+            if existing_user:
+                await update.message.reply_text("✅ أنت مسجل بالفعل! استخدم /search للبحث عن مستخدمين قريبين.")
+                return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error checking user registration: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء التحقق من التسجيل. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
 
-    # Create a button to start registration
-    keyboard = [[InlineKeyboardButton("بدء التسجيل", callback_data="agree_to_privacy")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # Send the privacy note with the button
-    await update.message.reply_text(privacy_note, reply_markup=reply_markup)
-    return USERNAME
-
-# Handle the user's agreement to the privacy note
-async def agree_to_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-
-    # Start the registration process
-    await query.edit_message_text("📝 بدأت عملية التسجيل!\nالرجاء إرسال اسم المستخدم الخاص بك:")
+    await update.message.reply_text("📝 بدأت عملية التسجيل!\nالرجاء إرسال اسم المستخدم الخاص بك:")
     return USERNAME
 
 # Set username
@@ -412,7 +404,6 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
     application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
     application.add_handler(CallbackQueryHandler(promote_user, pattern="^promote_"))
-    application.add_handler(CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"))
 
     # Run the bot
     application.run_polling()
