@@ -32,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration (use environment variables for sensitive data)
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # Replace with your bot token
+BOT_TOKEN = os.getenv("BOT_TOKEN", "your_bot_token_here")  # Replace with your bot token
 DATABASE = os.getenv("DATABASE", "users.db")  # Database file
 ADMIN_ID = 1796978458  # Admin user ID
 
@@ -287,9 +287,20 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.error(f"Error in show_nearby_profiles: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء البحث. الرجاء المحاولة مرة أخرى.")
 
+# Set bot commands
+async def set_bot_commands(application):
+    commands = [
+        ("start", "بدء التسجيل"),
+        ("search", "البحث عن مستخدمين قريبين"),
+    ]
+    await application.bot.set_my_commands(commands)
+
 # Main function
 def main() -> None:
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Set bot commands
+    application.post_init = set_bot_commands
 
     # Conversation handler for registration
     conv_handler = ConversationHandler(
