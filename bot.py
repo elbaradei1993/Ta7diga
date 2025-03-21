@@ -129,6 +129,34 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("✅ تم تسجيلك بنجاح!")
     return ConversationHandler.END
 
+async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    async with aiosqlite.connect(DATABASE) as db:
+        user = await db.execute("SELECT location FROM users WHERE id = ?", (user_id,))
+        result = await user.fetchone()
+
+        if result and result[0]:
+            user_location = tuple(map(float, result[0].split(',')))
+            cursor = await db.execute("SELECT id, name, bio, location FROM users WHERE location IS NOT NULL")
+            profiles = await cursor.fetchall()
+
+            sorted_profiles = sorted(
+                [(p[0], p[1], p[2], geodesic(user_location, tuple(map(float, p[3].split(',')))).km) for p in profiles],
+                key=lambda x: x[3]
+            )
+
+            if sorted_profiles:
+                message = "📍 المستخدمون القريبون منك:\n"
+                for profile in sorted_profiles:
+                    message += f"👤 {profile[1]} - {profile[3]:.2f} كم\n"
+                    message += f"📝 {profile[2]}\n"
+                    message += f"/message_{profile[0]}\n\n"
+                await update.message.reply_text(message)
+            else:
+                await update.message.reply_text("❌ لا يوجد مستخدمون قريبون منك.")
+        else:
+            await update.message.reply_text("❌ لم تقم بمشاركة موقعك بعد. الرجاء التسجيل أولاً.")
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("❌ تم إلغاء التسجيل.")
     return ConversationHandler.END
@@ -155,6 +183,7 @@ async def main():
     )
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("search", search))
     app.add_handler(register_handler)
     app.add_error_handler(error_handler)
 
