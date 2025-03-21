@@ -289,9 +289,21 @@ async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.error(f"Error banning user: {e}")
         await query.edit_message_text("❌ حدث خطأ أثناء حظر المستخدم. الرجاء المحاولة مرة أخرى.")
 
+# Function to set bot commands
+async def set_bot_commands(application):
+    commands = [
+        ("start", "بدء التسجيل"),
+        ("search", "البحث عن مستخدمين قريبين"),
+        ("admin", "لوحة التحكم (للمشرفين فقط)"),
+    ]
+    await application.bot.set_my_commands(commands)
+
 # Main function
 def main() -> None:
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Set bot commands
+    application.post_init = set_bot_commands
 
     # Conversation handler for registration
     conv_handler = ConversationHandler(
