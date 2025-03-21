@@ -222,7 +222,7 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_location = context.user_data.get('location')
     if not user_location:
-        await update.message.reply_text("❗ الرجاء التسجيل أولاً باستخدام /start لتحديد موقعك.")
+        await update.message.reply_text("❗ الرجاء التسجيل أولاً بالضغط علي /start لتحديد موقعك.")
         return
 
     user_coords = tuple(map(float, user_location.split(',')))
