@@ -59,6 +59,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    logger.info("Starting registration process")
     await update.message.reply_text("📝 ابدأ التسجيل!\nالرجاء إرسال اسم المستخدم الخاص بك:")
     return USERNAME
 
