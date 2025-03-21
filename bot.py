@@ -38,9 +38,12 @@ ADMIN_ID = 1796978458  # Admin user ID
 
 # List of Sudanese cities (no duplicates)
 SUDANESE_CITIES = [
-    "الخرطوم", "أم درمان", "بورتسودان", "ود مدني", "الأبيض", "الفاشر", "كادقلي", "نيالا", "الدويم", "عطبرة",
-    "كسلا", "سنار", "القضارف", "شندي", "ربك", "حلفا الجديدة", "كوستي", "الجنينة", "الدامازين", "الرهد",
-    "بارا", "الفاو", "الدبة", "النهود", "طوكر", "القاش", "كرمة", "مروي", "سنكات", "سواكن"
+    "الخرطوم", "أم درمان", "بحري", "بورتسودان", "كسلا", "القضارف", "ود مدني", "الأبيض", "نيالا", "الفاشر",
+    "دنقلا", "عطبرة", "كوستي", "سنار", "الضعين", "الدمازين", "شندي", "كريمة", "طوكر", "حلفا الجديدة",
+    "وادي حلفا", "أم روابة", "أبو جبيهة", "بابنوسة", "الجنينة", "جزيرة توتي", "الحصاحيصا", "رفاعة", "سنجة",
+    "الرنك", "حلفا", "الحديبة", "تندلتي", "الدلنج", "كادوقلي", "بنتيو", "الرهد", "نوري", "أرقين",
+    "خشم القربة", "النهود", "مروي", "سواكن", "حلايب", "أبورماد", "عبري", "كتم", "الضعين", "المجلد",
+    "كرنوي", "زالنجي"
 ]
 
 # Registration steps
@@ -73,6 +76,7 @@ async def init_db():
 
 # Start command (displays privacy note and starts registration)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    logger.info("Start function called.")
     user_id = update.message.from_user.id
     logger.info(f"User {user_id} started registration.")
 
@@ -89,6 +93,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     # Send the privacy note with the button
     await update.message.reply_text(privacy_note, reply_markup=reply_markup)
+    logger.info("Start function completed.")
     return USERNAME
 
 # Handle the user's agreement to the privacy note
@@ -295,9 +300,16 @@ async def set_bot_commands(application):
     ]
     await application.bot.set_my_commands(commands)
 
+# Delete webhook
+async def delete_webhook(application):
+    await application.bot.delete_webhook()
+
 # Main function
 def main() -> None:
     application = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # Delete webhook before starting polling
+    application.post_init = delete_webhook
 
     # Set bot commands
     application.post_init = set_bot_commands
@@ -310,8 +322,8 @@ def main() -> None:
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
             BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-            TYPE: [CallbackQueryHandler(set_type)],
-            CITY: [CallbackQueryHandler(set_city)],
+            TYPE: [CallbackQueryHandler(set_type, per_message=True)],  # Set per_message=True
+            CITY: [CallbackQueryHandler(set_city, per_message=True)],  # Set per_message=True
             LOCATION: [MessageHandler(filters.LOCATION, set_location)],
             PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
         },
