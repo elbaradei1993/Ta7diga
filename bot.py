@@ -169,6 +169,10 @@ async def set_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 # Set photo
 async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     try:
+        if not update.message.photo:
+            await update.message.reply_text("❌ الرجاء إرسال صورة صحيحة.")
+            return PHOTO
+
         photo_file = update.message.photo[-1].file_id
         context.user_data['photo'] = photo_file
 
