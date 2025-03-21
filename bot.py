@@ -1,7 +1,7 @@
 import logging
 import asyncio
 import nest_asyncio
-import aiosqlite  # Asynchronous SQLite library
+import aiosqlite
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -16,26 +16,18 @@ from telegram.ext import (
     filters
 )
 
-# Apply nest_asyncio for event loops
 nest_asyncio.apply()
 
-# Logging for debugging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Bot Token
-BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
-
-# Database connection
+BOT_TOKEN = "YOUR_BOT_TOKEN"
 DATABASE = "users.db"
-
-# Admin IDs
 ADMINS = [1796978458]
 
-# Initialize database
 async def init_db():
     async with aiosqlite.connect(DATABASE) as db:
         await db.execute(
@@ -53,7 +45,36 @@ async def init_db():
         )
         await db.commit()
 
-# Display profile command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = update.message.from_user
+    async with aiosqlite.connect(DATABASE) as db:
+        cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
+        result = await cursor.fetchone()
+
+    if not result:
+        await update.message.reply_text("🔹 **يرجى التسجيل أولًا.**")
+        await register_user(update, context)
+        return
+
+    keyboard = [
+        [InlineKeyboardButton("🔍 البحث", callback_data="search")],
+        [InlineKeyboardButton("👥 عرض المستخدمين", callback_data="show_users")],
+        [InlineKeyboardButton("📝 تعديل الملف", callback_data="edit_profile")],
+        [InlineKeyboardButton("📍 تحديث موقعي", callback_data="update_location")],
+        [InlineKeyboardButton("🗑️ حذف الملف", callback_data="delete_profile")],
+        [InlineKeyboardButton("⚙ الإعدادات", callback_data="settings")],
+    ]
+
+    if user.id in ADMINS:
+        keyboard.append([InlineKeyboardButton("🔧 لوحة الإدارة", callback_data="admin_panel")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("🌟 **مرحبًا بك في تحديقة!** اختر من القائمة:", reply_markup=reply_markup)
+
+async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("📸 يرجى إرسال صورتك الشخصية أو الضغط على زر التخطي.", 
+                                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("تخطي", callback_data="skip_photo")]]))
+
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
     async with aiosqlite.connect(DATABASE) as db:
@@ -71,86 +92,27 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         await update.message.reply_text("❌ لم يتم العثور على ملفك الشخصي.")
 
-# Delete profile
 async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info("Delete profile button clicked")
     query = update.callback_query
     await query.answer()
-    
-    try:
-        user_id = query.from_user.id
-        async with aiosqlite.connect(DATABASE) as db:
-            await db.execute("DELETE FROM users WHERE id=?", (user_id,))
-            await db.commit()
-        
-        await query.message.reply_text("✅ تم حذف ملفك الشخصي بنجاح.")
-    except Exception as e:
-        logger.error(f"Error deleting profile: {e}")
-        await query.message.reply_text("❌ فشل في حذف الملف الشخصي. يرجى المحاولة مرة أخرى.")
+    user_id = query.from_user.id
+    async with aiosqlite.connect(DATABASE) as db:
+        await db.execute("DELETE FROM users WHERE id=?", (user_id,))
+        await db.commit()
 
-# Start command
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info("/start command received")
-    try:
-        user = update.message.from_user
-        async with aiosqlite.connect(DATABASE) as db:
-            cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
-            result = await cursor.fetchone()
+    await query.message.reply_text("✅ تم حذف ملفك الشخصي بنجاح.")
 
-        if not result:
-            await update.message.reply_text("🔹 **يجب التسجيل أولًا لاستخدام البوت.**")
-            return
-
-        keyboard = [
-            [InlineKeyboardButton("🔍 حدّق", callback_data="search"),
-             InlineKeyboardButton("👥 عرض المستخدمين", callback_data="show_users")],
-            [InlineKeyboardButton("📝 تعديل ملفي", callback_data="edit_profile"),
-             InlineKeyboardButton("📍 تحديث موقعي", callback_data="update_location")],
-            [InlineKeyboardButton("🗑️ حذف الملف الشخصي", callback_data="delete_profile"),
-             InlineKeyboardButton("⚙ الإعدادات", callback_data="settings")],
-            [InlineKeyboardButton("🔙 الرجوع", callback_data="go_back")]
-        ]
-        
-        if user.id in ADMINS:
-            keyboard.append([InlineKeyboardButton("🔧 لوحة الإدارة", callback_data="admin_panel")])
-
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("🌟 **مرحبًا بك في تحديقة!** اختر من القائمة:", reply_markup=reply_markup)
-    except Exception as e:
-        logger.error(f"Error in start: {e}")
-        await update.message.reply_text("❌ حدث خطأ ما. يرجى المحاولة مرة أخرى.")
-
-# Go back
-async def go_back(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info("Go back button clicked")
-    query = update.callback_query
-    await query.answer()
-    await start(update, context)
-
-# Error handler
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error(msg="Exception while handling update:", exc_info=context.error)
-    if update and update.message:
-        await update.message.reply_text("❌ حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.")
-
-# Main function
 async def main():
-    logger.info("Starting bot...")
-    try:
-        await init_db()
-        app = ApplicationBuilder().token(BOT_TOKEN).build()
-        
-        app.add_error_handler(error_handler)
-        
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("profile", profile))
-        app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
-        app.add_handler(CallbackQueryHandler(go_back, pattern="^go_back$"))
-        
-        await app.bot.delete_webhook()
-        await app.run_polling()
-    except Exception as e:
-        logger.error(f"Error in main: {e}")
+    await init_db()
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("profile", profile))
+    app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
+    app.add_handler(CallbackQueryHandler(register_user, pattern="^skip_photo$"))
+
+    await app.bot.delete_webhook()
+    await app.run_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
