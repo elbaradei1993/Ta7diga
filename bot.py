@@ -32,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration (use environment variables for sensitive data)
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # Replace with your bot token
+BOT_TOKEN = os.getenv("BOT_TOKEN", "your_bot_token_here")  # Replace with your bot token
 DATABASE = os.getenv("DATABASE", "users.db")  # Database file
 ADMIN_ID = 1796978458  # Admin user ID
 
@@ -322,8 +322,8 @@ def main() -> None:
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
             BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-            TYPE: [CallbackQueryHandler(set_type, per_message=True)],  # Set per_message=True
-            CITY: [CallbackQueryHandler(set_city, per_message=True)],  # Set per_message=True
+            TYPE: [CallbackQueryHandler(set_type)],  # Removed per_message=True
+            CITY: [CallbackQueryHandler(set_city)],  # Removed per_message=True
             LOCATION: [MessageHandler(filters.LOCATION, set_location)],
             PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
         },
