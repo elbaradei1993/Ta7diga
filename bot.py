@@ -7,7 +7,8 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
-    InputMediaPhoto
+    InputMediaPhoto,
+    Bot
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -81,6 +82,15 @@ async def init_db():
             logger.info("Database initialized successfully.")
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
+
+# Clear pending updates
+async def clear_pending_updates():
+    bot = Bot(token=BOT_TOKEN)
+    updates = await bot.get_updates()
+    if updates:
+        last_update_id = updates[-1].update_id
+        await bot.get_updates(offset=last_update_id + 1)
+    logger.info("Pending updates cleared.")
 
 # Start command (displays privacy note and starts registration)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -489,14 +499,9 @@ async def delete_webhook(application):
     await application.bot.delete_webhook()
 
 # Main function
-def main() -> None:
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # Delete webhook before starting polling
-    application.post_init = delete_webhook
-
-    # Set bot commands
-    application.post_init = set_bot_commands
+async def main():
+    await clear_pending_updates()
+    application = ApplicationBuilder().token(BOT_TOKEN).get_updates_timeout(30).get_updates_limit(100).build()
 
     # Conversation handler for registration
     conv_handler = ConversationHandler(
@@ -527,8 +532,8 @@ def main() -> None:
     application.add_handler(CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"))
 
     # Run the bot
-    application.run_polling()
+    await application.run_polling()
 
 if __name__ == '__main__':
     asyncio.run(init_db())  # Initialize the database
-    main()
+    asyncio.run(main())
