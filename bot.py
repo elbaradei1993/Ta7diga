@@ -33,7 +33,7 @@ DATABASE = "users.db"
 ADMINS = [1796978458]
 
 # Registration steps
-USERNAME, NAME, AGE, BIO, LOCATION, PHOTO = range(6)
+USERNAME, NAME, AGE, BIO, TYPE, LOCATION, PHOTO = range(7)
 
 async def init_db():
     async with aiosqlite.connect(DATABASE) as db:
@@ -46,8 +46,7 @@ async def init_db():
                 bio TEXT,
                 type TEXT,
                 location TEXT,
-                photo TEXT,
-                tribes TEXT
+                photo TEXT
             )"""
         )
         await db.commit()
@@ -80,13 +79,33 @@ async def set_age(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 async def set_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['bio'] = update.message.text
-    await update.message.reply_text("📍 الآن أرسل موقعك الجغرافي (إحداثيات مثل 24.7136,46.6753):")
+    keyboard = [
+        [InlineKeyboardButton("سالب", callback_data="سالب")],
+        [InlineKeyboardButton("موجب", callback_data="موجب")],
+        [InlineKeyboardButton("مبادل", callback_data="مبادل")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("🔄 اختر نوعك:", reply_markup=reply_markup)
+    return TYPE
+
+async def set_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    context.user_data['type'] = query.data
+    await query.edit_message_text(f"✅ تم اختيار النوع: {query.data}")
+    await query.message.reply_text("📍 الآن أرسل موقعك الجغرافي من خلال مشاركة موقعك مباشرة عبر هاتفك:")
     return LOCATION
 
 async def set_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    context.user_data['location'] = update.message.text
-    await update.message.reply_text("📷 الآن أرسل صورتك الشخصية:")
-    return PHOTO
+    if update.message.location:
+        lat = update.message.location.latitude
+        lon = update.message.location.longitude
+        context.user_data['location'] = f"{lat},{lon}"
+        await update.message.reply_text("📷 الآن أرسل صورتك الشخصية:")
+        return PHOTO
+    else:
+        await update.message.reply_text("❌ الرجاء مشاركة موقعك الجغرافي باستخدام زر الموقع في هاتفك.")
+        return LOCATION
 
 async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     photo_file = update.message.photo[-1].file_id
@@ -94,12 +113,13 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     async with aiosqlite.connect(DATABASE) as db:
         await db.execute(
-            "INSERT OR REPLACE INTO users (id, username, name, age, bio, location, photo) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO users (id, username, name, age, bio, type, location, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (update.message.from_user.id,
              context.user_data['username'],
              context.user_data['name'],
              context.user_data['age'],
              context.user_data['bio'],
+             context.user_data['type'],
              context.user_data['location'],
              context.user_data['photo'])
         )
@@ -126,7 +146,8 @@ async def main():
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
             BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-            LOCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_location)],
+            TYPE: [CallbackQueryHandler(set_type)],
+            LOCATION: [MessageHandler(filters.LOCATION, set_location)],
             PHOTO: [MessageHandler(filters.PHOTO, set_photo)]
         },
         fallbacks=[CommandHandler("cancel", cancel)]
