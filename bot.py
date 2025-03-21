@@ -15,7 +15,8 @@ from telegram.ext import (
     ContextTypes,
     CallbackQueryHandler,
     MessageHandler,
-    filters
+    filters,
+    ConversationHandler
 )
 import telegram.error
 
@@ -30,6 +31,9 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
 DATABASE = "users.db"
 ADMINS = [1796978458]
+
+# Registration steps
+USERNAME, NAME, AGE, BIO, LOCATION, PHOTO = range(6)
 
 async def init_db():
     async with aiosqlite.connect(DATABASE) as db:
@@ -51,63 +55,62 @@ async def init_db():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
         "مرحبًا بك! 🏳️‍🌈\n"
-        "قم بإنشاء ملفك الشخصي باستخدام الأمر /profile.\n"
+        "قم بإنشاء ملفك الشخصي باستخدام الأمر /register.\n"
         "يمكنك البحث عن مستخدمين قريبين منك باستخدام الأمر /search."
     )
 
-async def ask_for_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = [
-        [InlineKeyboardButton("سالب", callback_data="type_salb")],
-        [InlineKeyboardButton("موجب", callback_data="type_mojab")],
-        [InlineKeyboardButton("مبادل", callback_data="type_mubadel")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🔹 اختر نوعك:", reply_markup=reply_markup)
+async def register(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("📝 ابدأ التسجيل!\nالرجاء إرسال اسم المستخدم الخاص بك:")
+    return USERNAME
 
-async def type_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    selected_type = query.data.split("_")[1]  # Extract 'salb', 'mojab', or 'mubadel'
+async def set_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['username'] = update.message.text
+    await update.message.reply_text("💬 الآن أرسل اسمك الكامل:")
+    return NAME
+
+async def set_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['name'] = update.message.text
+    await update.message.reply_text("📅 الآن أرسل عمرك:")
+    return AGE
+
+async def set_age(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['age'] = update.message.text
+    await update.message.reply_text("🖋️ الآن أرسل سيرتك الذاتية:")
+    return BIO
+
+async def set_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['bio'] = update.message.text
+    await update.message.reply_text("📍 الآن أرسل موقعك الجغرافي (إحداثيات مثل 24.7136,46.6753):")
+    return LOCATION
+
+async def set_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data['location'] = update.message.text
+    await update.message.reply_text("📷 الآن أرسل صورتك الشخصية:")
+    return PHOTO
+
+async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    photo_file = update.message.photo[-1].file_id
+    context.user_data['photo'] = photo_file
 
     async with aiosqlite.connect(DATABASE) as db:
-        await db.execute("UPDATE users SET type = ? WHERE id = ?", (selected_type, query.from_user.id))
+        await db.execute(
+            "INSERT OR REPLACE INTO users (id, username, name, age, bio, location, photo) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (update.message.from_user.id,
+             context.user_data['username'],
+             context.user_data['name'],
+             context.user_data['age'],
+             context.user_data['bio'],
+             context.user_data['location'],
+             context.user_data['photo'])
+        )
         await db.commit()
 
-    await query.answer("✅ تم تحديث نوعك بنجاح.")
-    await query.message.edit_text(f"🌐 نوعك الحالي: {selected_type}")
+    await update.message.reply_text("✅ تم تسجيلك بنجاح!")
+    return ConversationHandler.END
 
-async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.message.from_user.id
-    async with aiosqlite.connect(DATABASE) as db:
-        cursor = await db.execute("SELECT location FROM users WHERE id=?", (user_id,))
-        user_location = await cursor.fetchone()
-
-        if not user_location or not user_location[0]:
-            await update.message.reply_text("❌ لم يتم تعيين موقعك. يرجى تحديث موقعك أولًا.")
-            return
-
-        user_coords = tuple(map(float, user_location[0].split(',')))
-        cursor = await db.execute("SELECT id, name, location, photo FROM users WHERE id != ?", (user_id,))
-        results = await cursor.fetchall()
-
-    nearby_profiles = []
-    for profile in results:
-        if profile[2]:
-            profile_coords = tuple(map(float, profile[2].split(',')))
-            distance = geodesic(user_coords, profile_coords).km
-            if distance <= 10:  # 10 km radius
-                nearby_profiles.append(profile)
-
-    if not nearby_profiles:
-        await update.message.reply_text("🔍 لا توجد ملفات شخصية قريبة منك.")
-        return
-
-    keyboard = [
-        [InlineKeyboardButton(profile[1], callback_data=f"view_profile_{profile[0]}")]
-        for profile in nearby_profiles
-    ]
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("📍 المستخدمون القريبون منك:", reply_markup=reply_markup)
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("❌ تم إلغاء التسجيل.")
+    return ConversationHandler.END
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"Update {update} caused error {context.error}")
@@ -116,10 +119,21 @@ async def main():
     await init_db()
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    register_handler = ConversationHandler(
+        entry_points=[CommandHandler("register", register)],
+        states={
+            USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)],
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
+            AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
+            BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
+            LOCATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_location)],
+            PHOTO: [MessageHandler(filters.PHOTO, set_photo)]
+        },
+        fallbacks=[CommandHandler("cancel", cancel)]
+    )
+
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("profile", ask_for_type))
-    app.add_handler(CommandHandler("search", search))
-    app.add_handler(CallbackQueryHandler(type_selection, pattern="^type_"))
+    app.add_handler(register_handler)
     app.add_error_handler(error_handler)
 
     await app.bot.delete_webhook(drop_pending_updates=True)
