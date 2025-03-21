@@ -2,10 +2,12 @@ import logging
 import asyncio
 import nest_asyncio
 import aiosqlite
+from geopy.distance import geodesic
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
+    InputMediaPhoto
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -45,97 +47,59 @@ async def init_db():
         )
         await db.commit()
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.message.from_user
-    async with aiosqlite.connect(DATABASE) as db:
-        cursor = await db.execute("SELECT * FROM users WHERE id=?", (user.id,))
-        result = await cursor.fetchone()
+async def ask_for_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    keyboard = [
+        [InlineKeyboardButton("سالب", callback_data="type_salb")],
+        [InlineKeyboardButton("موجب", callback_data="type_mojab")],
+        [InlineKeyboardButton("مبادل", callback_data="type_mubadel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("🔹 اختر نوعك:", reply_markup=reply_markup)
 
-    if not result:
-        await update.message.reply_text("🔹 **يرجى التسجيل أولًا.**")
-        await ask_registration_details(update, context)
+async def type_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    selected_type = query.data.split("_")[1]  # Extract 'salb', 'mojab', or 'mubadel'
+
+    async with aiosqlite.connect(DATABASE) as db:
+        await db.execute("UPDATE users SET type = ? WHERE id = ?", (selected_type, query.from_user.id))
+        await db.commit()
+
+    await query.answer("✅ تم تحديث نوعك بنجاح.")
+    await query.message.edit_text(f"🌐 نوعك الحالي: {selected_type}")
+
+async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    async with aiosqlite.connect(DATABASE) as db:
+        cursor = await db.execute("SELECT location FROM users WHERE id=?", (user_id,))
+        user_location = await cursor.fetchone()
+
+        if not user_location or not user_location[0]:
+            await update.message.reply_text("❌ لم يتم تعيين موقعك. يرجى تحديث موقعك أولًا.")
+            return
+
+        user_coords = tuple(map(float, user_location[0].split(',')))
+        cursor = await db.execute("SELECT id, name, location, photo FROM users WHERE id != ?", (user_id,))
+        results = await cursor.fetchall()
+
+    nearby_profiles = []
+    for profile in results:
+        if profile[2]:
+            profile_coords = tuple(map(float, profile[2].split(',')))
+            distance = geodesic(user_coords, profile_coords).km
+            if distance <= 10:  # 10 km radius
+                nearby_profiles.append(profile)
+
+    if not nearby_profiles:
+        await update.message.reply_text("🔍 لا توجد ملفات شخصية قريبة منك.")
         return
 
     keyboard = [
-        [InlineKeyboardButton("🔍 البحث", callback_data="search")],
-        [InlineKeyboardButton("👥 عرض المستخدمين", callback_data="show_users")],
-        [InlineKeyboardButton("📝 تعديل الملف", callback_data="edit_profile")],
-        [InlineKeyboardButton("📍 تحديث موقعي", callback_data="update_location")],
-        [InlineKeyboardButton("🗑️ حذف الملف", callback_data="delete_profile")],
-        [InlineKeyboardButton("⚙ الإعدادات", callback_data="settings")],
+        [InlineKeyboardButton(profile[1], callback_data=f"view_profile_{profile[0]}")]
+        for profile in nearby_profiles
     ]
 
-    if user.id in ADMINS:
-        keyboard.append([InlineKeyboardButton("🔧 لوحة الإدارة", callback_data="admin_panel")])
-
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🌟 **مرحبًا بك في تحديقة!** اختر من القائمة:", reply_markup=reply_markup)
-
-async def ask_registration_details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("👤 ما اسمك؟")
-    context.user_data['register_step'] = 'name'
-
-async def registration_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.message.from_user
-    text = update.message.text
-    step = context.user_data.get('register_step')
-
-    if step == 'name':
-        context.user_data['name'] = text
-        await update.message.reply_text("📅 كم عمرك؟")
-        context.user_data['register_step'] = 'age'
-    elif step == 'age':
-        context.user_data['age'] = text
-        await update.message.reply_text("💬 اكتب نبذة قصيرة عنك.")
-        context.user_data['register_step'] = 'bio'
-    elif step == 'bio':
-        context.user_data['bio'] = text
-        keyboard = [
-            [InlineKeyboardButton("سالب", callback_data="type_bottom")],
-            [InlineKeyboardButton("موجب", callback_data="type_top")],
-            [InlineKeyboardButton("مبادل", callback_data="type_switch")]
-        ]
-        await update.message.reply_text("🌐 اختر نوعك:", reply_markup=InlineKeyboardMarkup(keyboard))
-        context.user_data['register_step'] = 'type'
-    elif step == 'photo':
-        context.user_data['photo'] = text
-        async with aiosqlite.connect(DATABASE) as db:
-            await db.execute("""
-                INSERT INTO users (id, username, name, age, bio, type, location, photo, tribes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (user.id, user.username, context.user_data['name'],
-                   context.user_data['age'], context.user_data['bio'],
-                   context.user_data['type'], None, context.user_data['photo'], None))
-            await db.commit()
-
-        await update.message.reply_text("✅ تم إنشاء ملفك الشخصي بنجاح!")
-
-async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user_id = update.message.from_user.id
-    async with aiosqlite.connect(DATABASE) as db:
-        cursor = await db.execute("SELECT * FROM users WHERE id=?", (user_id,))
-        profile_data = await cursor.fetchone()
-
-    if profile_data:
-        profile_text = (f"📋 **ملفك الشخصي**\n"
-                        f"👤 الاسم: {profile_data[2]}\n"
-                        f"📅 العمر: {profile_data[3]}\n"
-                        f"💬 نبذة: {profile_data[4]}\n"
-                        f"🌐 النوع: {profile_data[5]}\n"
-                        f"📍 الموقع: {profile_data[6]}\n")
-        await update.message.reply_text(profile_text)
-    else:
-        await update.message.reply_text("❌ لم يتم العثور على ملفك الشخصي.")
-
-async def delete_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    user_id = query.from_user.id
-    async with aiosqlite.connect(DATABASE) as db:
-        await db.execute("DELETE FROM users WHERE id=?", (user_id,))
-        await db.commit()
-
-    await query.message.reply_text("✅ تم حذف ملفك الشخصي بنجاح.")
+    await update.message.reply_text("📍 المستخدمون القريبون منك:", reply_markup=reply_markup)
 
 async def main():
     await init_db()
@@ -143,8 +107,10 @@ async def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("profile", profile))
+    app.add_handler(CommandHandler("search", search))
     app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, registration_handler))
+    app.add_handler(CallbackQueryHandler(type_selection, pattern="^type_"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, profile))
 
     await app.bot.delete_webhook(drop_pending_updates=True)
     await app.run_polling()
