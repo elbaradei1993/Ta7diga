@@ -17,6 +17,7 @@ from telegram.ext import (
     MessageHandler,
     filters
 )
+import telegram.error
 
 nest_asyncio.apply()
 
@@ -108,6 +109,9 @@ async def search(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("📍 المستخدمون القريبون منك:", reply_markup=reply_markup)
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error(f"Update {update} caused error {context.error}")
+
 async def main():
     await init_db()
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -116,6 +120,7 @@ async def main():
     app.add_handler(CommandHandler("profile", ask_for_type))
     app.add_handler(CommandHandler("search", search))
     app.add_handler(CallbackQueryHandler(type_selection, pattern="^type_"))
+    app.add_error_handler(error_handler)
 
     await app.bot.delete_webhook(drop_pending_updates=True)
     await app.run_polling()
