@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # Replace with your bot token
 DATABASE = os.getenv("DATABASE", "users.db")  # Database file
 ADMIN_ID = 1796978458  # Admin user ID
+WEB_APP_URL = "https://your-web-app-url.com"  # Replace with your web app URL
 
 # Registration steps
 USERNAME, NAME, AGE, BIO, TYPE, LOCATION, PHOTO = range(7)
@@ -365,12 +366,21 @@ async def promote_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Error promoting user: {e}")
         await query.edit_message_text("❌ حدث خطأ أثناء ترقية المستخدم. الرجاء المحاولة مرة أخرى.")
 
+# Launch mini Telegram app
+async def launch_mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    keyboard = [
+        [InlineKeyboardButton("فتح التطبيق المصغر", web_app={"url": WEB_APP_URL})]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("🚀 اضغط على الزر أدناه لفتح التطبيق المصغر:", reply_markup=reply_markup)
+
 # Function to set bot commands
 async def set_bot_commands(application):
     commands = [
         ("start", "بدء التسجيل"),
         ("search", "البحث عن مستخدمين قريبين"),
         ("admin", "لوحة التحكم (للمشرفين فقط)"),
+        ("app", "فتح التطبيق المصغر"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -400,6 +410,7 @@ def main() -> None:
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
     application.add_handler(CommandHandler('admin', admin_panel))
+    application.add_handler(CommandHandler('app', launch_mini_app))
     application.add_handler(CallbackQueryHandler(admin_profile_actions, pattern="^admin_profile_"))
     application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
     application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
