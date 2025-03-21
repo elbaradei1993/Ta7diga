@@ -32,22 +32,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration (use environment variables for sensitive data)
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # Replace with your bot token
+BOT_TOKEN = os.getenv("BOT_TOKEN", "")  # Replace with 7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrakyour bot token
 DATABASE = os.getenv("DATABASE", "users.db")  # Database file
 ADMIN_ID = 1796978458  # Admin user ID
 
-# List of Sudanese cities (no duplicates)
-SUDANESE_CITIES = [
-    "الخرطوم", "أم درمان", "بحري", "بورتسودان", "كسلا", "القضارف", "ود مدني", "الأبيض", "نيالا", "الفاشر",
-    "دنقلا", "عطبرة", "كوستي", "سنار", "الضعين", "الدمازين", "شندي", "كريمة", "طوكر", "حلفا الجديدة",
-    "وادي حلفا", "أم روابة", "أبو جبيهة", "بابنوسة", "الجنينة", "جزيرة توتي", "الحصاحيصا", "رفاعة", "سنجة",
-    "الرنك", "حلفا", "الحديبة", "تندلتي", "الدلنج", "كادوقلي", "بنتيو", "الرهد", "نوري", "أرقين",
-    "خشم القربة", "النهود", "مروي", "سواكن", "حلايب", "أبورماد", "عبري", "كتم", "الضعين", "المجلد",
-    "كرنوي", "زالنجي"
-]
+# List of countries and cities
+COUNTRIES = {
+    "السودان": [
+        "الخرطوم", "أم درمان", "بحري", "بورتسودان", "كسلا", "القضارف", "ود مدني", "الأبيض", "نيالا", "الفاشر",
+        "دنقلا", "عطبرة", "كوستي", "سنار", "الضعين", "الدمازين", "شندي", "كريمة", "طوكر", "حلفا الجديدة",
+        "وادي حلفا", "أم روابة", "أبو جبيهة", "بابنوسة", "الجنينة", "جزيرة توتي", "الحصاحيصا", "رفاعة", "سنجة",
+        "الرنك", "حلفا", "الحديبة", "تندلتي", "الدلنج", "كادوقلي", "بنتيو", "الرهد", "نوري", "أرقين",
+        "خشم القربة", "النهود", "مروي", "سواكن", "حلايب", "أبورماد", "عبري", "كتم", "الضعين", "المجلد",
+        "كرنوي", "زالنجي"
+    ],
+    "مصر": ["القاهرة", "الإسكندرية", "الجيزة", "شرم الشيخ"],
+    "السعودية": ["الرياض", "جدة", "مكة", "المدينة المنورة"],
+    "ليبيا": ["طرابلس", "بنغازي", "مصراتة", "سبها"],
+    "الإمارات": ["دبي", "أبوظبي", "الشارقة", "عجمان"]
+}
 
 # Registration steps
-USERNAME, NAME, AGE, BIO, TYPE, CITY, LOCATION, PHOTO = range(8)
+USERNAME, NAME, AGE, BIO, TYPE, COUNTRY, CITY, LOCATION, PHOTO = range(9)
 
 # Initialize the database
 async def init_db():
@@ -63,6 +69,7 @@ async def init_db():
                     type TEXT,
                     location TEXT,
                     photo TEXT,
+                    country TEXT,
                     city TEXT,
                     banned INTEGER DEFAULT 0,
                     frozen INTEGER DEFAULT 0,
@@ -178,9 +185,23 @@ async def set_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     context.user_data['type'] = query.data
     await query.edit_message_text(f"✅ تم اختيار النوع: {query.data}")
 
-    # Create buttons for Sudanese cities
-    keyboard = [[InlineKeyboardButton(city, callback_data=f"city_{city}")] for city in SUDANESE_CITIES]
+    # Create buttons for countries
+    keyboard = [[InlineKeyboardButton(country, callback_data=f"country_{country}")] for country in COUNTRIES.keys()]
     reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.message.reply_text("🌍 اختر بلدك:", reply_markup=reply_markup)
+    return COUNTRY
+
+# Set country
+async def set_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    country = query.data.split('_')[1]  # Extract country name from callback data
+    context.user_data['country'] = country
+
+    # Create buttons for cities in the selected country
+    keyboard = [[InlineKeyboardButton(city, callback_data=f"city_{city}")] for city in COUNTRIES[country]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(f"✅ تم اختيار البلد: {country}")
     await query.message.reply_text("🏙️ اختر مدينتك:", reply_markup=reply_markup)
     return CITY
 
@@ -223,7 +244,7 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         # Save user data to the database
         async with aiosqlite.connect(DATABASE) as db:
             await db.execute(
-                "INSERT OR REPLACE INTO users (id, username, name, age, bio, type, location, photo, city) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO users (id, username, name, age, bio, type, location, photo, country, city) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (update.message.from_user.id,
                  context.user_data['username'],
                  context.user_data['name'],
@@ -232,6 +253,7 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                  context.user_data['type'],
                  context.user_data['location'],
                  context.user_data['photo'],
+                 context.user_data['country'],
                  context.user_data['city'])
             )
             await db.commit()
@@ -267,7 +289,7 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
                         "name": row[2],
                         "age": row[3],
                         "type": row[5],
-                        "city": row[8],
+                        "city": row[9],
                         "distance": distance
                     })
 
@@ -292,11 +314,125 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.error(f"Error in show_nearby_profiles: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء البحث. الرجاء المحاولة مرة أخرى.")
 
+# Admin panel command
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى لوحة التحكم.")
+        return
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            async with db.execute("SELECT * FROM users") as cursor:
+                keyboard = []
+                async for row in cursor:
+                    # Create a profile card for each user
+                    profile_text = (
+                        f"👤 الاسم: {row[2]}\n"
+                        f"📅 العمر: {row[3]}\n"
+                        f"🖋️ النبذة: {row[4]}\n"
+                        f"🔄 النوع: {row[5]}\n"
+                        f"📍 الموقع: [فتح في خرائط جوجل](https://www.google.com/maps?q={row[6]})\n"
+                        f"📸 الصورة: [عرض الصورة]({row[7]})"
+                    )
+                    keyboard.append([InlineKeyboardButton(f"👤 {row[2]}", callback_data=f"admin_profile_{row[0]}")])
+
+                if keyboard:
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await update.message.reply_text("👤 المستخدمون المسجلون:", reply_markup=reply_markup)
+                else:
+                    await update.message.reply_text("😔 لا يوجد مستخدمون مسجلون.")
+    except Exception as e:
+        logger.error(f"Error in admin_panel: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحميل لوحة التحكم. الرجاء المحاولة مرة أخرى.")
+
+# Admin profile actions
+async def admin_profile_actions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[2])  # Extract user ID from callback data
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+            user = await cursor.fetchone()
+
+            if user:
+                # Create a profile card
+                profile_text = (
+                    f"👤 الاسم: {user[2]}\n"
+                    f"📅 العمر: {user[3]}\n"
+                    f"🖋️ النبذة: {user[4]}\n"
+                    f"🔄 النوع: {user[5]}\n"
+                    f"📍 الموقع: [فتح في خرائط جوجل](https://www.google.com/maps?q={user[6]})\n"
+                    f"📸 الصورة: [عرض الصورة]({user[7]})"
+                )
+
+                # Create action buttons
+                keyboard = [
+                    [InlineKeyboardButton("❌ حظر", callback_data=f"ban_{user[0]}")],
+                    [InlineKeyboardButton("❄️ تجميد", callback_data=f"freeze_{user[0]}")],
+                    [InlineKeyboardButton("⭐ ترقية", callback_data=f"promote_{user[0]}")],
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+
+                # Send the profile card with action buttons
+                await query.edit_message_text(profile_text, reply_markup=reply_markup, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error in admin_profile_actions: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تحميل الملف الشخصي. الرجاء المحاولة مرة أخرى.")
+
+# Ban user callback
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[1])  # Extract user ID from callback data
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET banned = 1 WHERE id = ?", (user_id,))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم حظر المستخدم بنجاح.")
+    except Exception as e:
+        logger.error(f"Error banning user: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء حظر المستخدم. الرجاء المحاولة مرة أخرى.")
+
+# Freeze user callback
+async def freeze_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[1])  # Extract user ID from callback data
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET frozen = 1 WHERE id = ?", (user_id,))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم تجميد المستخدم بنجاح.")
+    except Exception as e:
+        logger.error(f"Error freezing user: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تجميد المستخدم. الرجاء المحاولة مرة أخرى.")
+
+# Promote user callback
+async def promote_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[1])  # Extract user ID from callback data
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET admin = 1 WHERE id = ?", (user_id,))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم ترقية المستخدم إلى مشرف بنجاح.")
+    except Exception as e:
+        logger.error(f"Error promoting user: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء ترقية المستخدم. الرجاء المحاولة مرة أخرى.")
+
 # Set bot commands
 async def set_bot_commands(application):
     commands = [
         ("start", "بدء التسجيل"),
         ("search", "البحث عن مستخدمين قريبين"),
+        ("admin", "لوحة التحكم (للمشرفين فقط)"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -322,8 +458,9 @@ def main() -> None:
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
             BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-            TYPE: [CallbackQueryHandler(set_type)],  # Removed per_message=True
-            CITY: [CallbackQueryHandler(set_city)],  # Removed per_message=True
+            TYPE: [CallbackQueryHandler(set_type)],
+            COUNTRY: [CallbackQueryHandler(set_country)],
+            CITY: [CallbackQueryHandler(set_city)],
             LOCATION: [MessageHandler(filters.LOCATION, set_location)],
             PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
         },
@@ -333,6 +470,11 @@ def main() -> None:
     # Add handlers
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
+    application.add_handler(CommandHandler('admin', admin_panel))
+    application.add_handler(CallbackQueryHandler(admin_profile_actions, pattern="^admin_profile_"))
+    application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
+    application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
+    application.add_handler(CallbackQueryHandler(promote_user, pattern="^promote_"))
     application.add_handler(CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"))
 
     # Run the bot
