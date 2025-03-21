@@ -83,15 +83,6 @@ async def init_db():
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
 
-# Clear pending updates
-async def clear_pending_updates():
-    bot = Bot(token=BOT_TOKEN)
-    updates = await bot.get_updates()
-    if updates:
-        last_update_id = updates[-1].update_id
-        await bot.get_updates(offset=last_update_id + 1)
-    logger.info("Pending updates cleared.")
-
 # Start command (displays privacy note and starts registration)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     logger.info("Start function called.")
@@ -494,14 +485,9 @@ async def set_bot_commands(application):
     ]
     await application.bot.set_my_commands(commands)
 
-# Delete webhook
-async def delete_webhook(application):
-    await application.bot.delete_webhook()
-
 # Main function
 async def main():
-    await clear_pending_updates()
-    application = ApplicationBuilder().token(BOT_TOKEN).get_updates_timeout(30).get_updates_limit(100).build()
+    application = ApplicationBuilder().token(BOT_TOKEN).get_updates_pool_timeout(30).build()
 
     # Conversation handler for registration
     conv_handler = ConversationHandler(
@@ -530,6 +516,9 @@ async def main():
     application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
     application.add_handler(CallbackQueryHandler(promote_user, pattern="^promote_"))
     application.add_handler(CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"))
+
+    # Set bot commands
+    await set_bot_commands(application)
 
     # Run the bot
     await application.run_polling()
