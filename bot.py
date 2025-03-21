@@ -242,6 +242,9 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         photo_file = update.message.photo[-1].file_id
         context.user_data['photo'] = photo_file
 
+        # Log user data
+        logger.info(f"User data: {context.user_data}")
+
         # Save user data to the database
         async with aiosqlite.connect(DATABASE) as db:
             await db.execute(
@@ -322,8 +325,10 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     query = update.callback_query
     await query.answer()
 
-    user_id = int(query.data.split('_')[1])  # Extract user ID from callback data
     try:
+        user_id = int(query.data.split('_')[1])  # Extract user ID from callback data
+        logger.info(f"Viewing profile for user ID: {user_id}")
+
         async with aiosqlite.connect(DATABASE) as db:
             cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
             user = await cursor.fetchone()
@@ -351,6 +356,8 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
                 # Send the profile card with action buttons
                 await query.edit_message_text(profile_text, reply_markup=reply_markup, parse_mode="Markdown")
+            else:
+                await query.edit_message_text("❌ المستخدم غير موجود.")
     except Exception as e:
         logger.error(f"Error in view_profile: {e}")
         await query.edit_message_text("❌ حدث خطأ أثناء تحميل الملف الشخصي. الرجاء المحاولة مرة أخرى.")
