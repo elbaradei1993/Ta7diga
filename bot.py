@@ -71,7 +71,7 @@ async def init_db():
                     photo TEXT,
                     country TEXT,
                     city TEXT,
-                    telegram_id INTEGER UNIQUE,  # Add this column
+                    telegram_id INTEGER UNIQUE,
                     banned INTEGER DEFAULT 0,
                     frozen INTEGER DEFAULT 0,
                     admin INTEGER DEFAULT 0
@@ -365,24 +365,24 @@ async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # Admin panel command
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
+    logger.info(f"User ID: {user_id}, Admin ID: {ADMIN_ID}")
     if user_id != ADMIN_ID:
         await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى لوحة التحكم.")
         return
 
     try:
         async with aiosqlite.connect(DATABASE) as db:
+            logger.info("Database connection successful.")
+            async with db.execute("SELECT COUNT(*) FROM users") as cursor:
+                count = await cursor.fetchone()
+                if count[0] == 0:
+                    await update.message.reply_text("😔 لا يوجد مستخدمون مسجلون.")
+                    return
+
             async with db.execute("SELECT * FROM users") as cursor:
                 keyboard = []
                 async for row in cursor:
-                    # Create a profile card for each user
-                    profile_text = (
-                        f"👤 الاسم: {row[2]}\n"
-                        f"📅 العمر: {row[3]}\n"
-                        f"🖋️ النبذة: {row[4]}\n"
-                        f"🔄 النوع: {row[5]}\n"
-                        f"📍 الموقع: [فتح في خرائط جوجل](https://www.google.com/maps?q={row[6]})\n"
-                        f"📸 الصورة: [عرض الصورة]({row[7]})"
-                    )
+                    logger.info(f"User found: {row}")
                     keyboard.append([InlineKeyboardButton(f"👤 {row[2]}", callback_data=f"admin_profile_{row[0]}")])
 
                 if keyboard:
@@ -519,7 +519,7 @@ def main() -> None:
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
     application.add_handler(CommandHandler('admin', admin_panel))
-    application.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))  # Add this line
+    application.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))
     application.add_handler(CallbackQueryHandler(admin_profile_actions, pattern="^admin_profile_"))
     application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
     application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
