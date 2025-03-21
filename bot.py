@@ -35,7 +35,6 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # Replace with your bot token
 DATABASE = os.getenv("DATABASE", "users.db")  # Database file
 ADMIN_ID = 1796978458  # Admin user ID
-WEB_APP_URL = "https://t7diga-mini-app-new-repo-production.up.railway.app"  # Replace with your deployed Mini App URL
 
 # Registration steps
 USERNAME, NAME, AGE, BIO, TYPE, LOCATION, PHOTO = range(7)
@@ -64,25 +63,33 @@ async def init_db():
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
 
-# Start command (starts registration directly)
+# Start command (displays privacy note and starts registration)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.message.from_user.id
     logger.info(f"User {user_id} started registration.")
 
-    # Check if the user is already registered
-    try:
-        async with aiosqlite.connect(DATABASE) as db:
-            cursor = await db.execute("SELECT id FROM users WHERE id = ?", (user_id,))
-            existing_user = await cursor.fetchone()
-            if existing_user:
-                await update.message.reply_text("✅ أنت مسجل بالفعل! استخدم /search للبحث عن مستخدمين قريبين.")
-                return ConversationHandler.END
-    except Exception as e:
-        logger.error(f"Error checking user registration: {e}")
-        await update.message.reply_text("❌ حدث خطأ أثناء التحقق من التسجيل. الرجاء المحاولة مرة أخرى.")
-        return ConversationHandler.END
+    # Display the privacy note
+    privacy_note = (
+        "نود إعلامك أننا نحرص على حماية خصوصيتك باستخدام أفضل تقنيات التشفير والتخزين الآمن. "
+        ".\n\n"
+        "اضغط على الزر أدناه لبدء التسجيل."
+    )
 
-    await update.message.reply_text("📝 بدأت عملية التسجيل!\nالرجاء إرسال اسم المستخدم الخاص بك:")
+    # Create a button to start registration
+    keyboard = [[InlineKeyboardButton("بدء التسجيل", callback_data="agree_to_privacy")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Send the privacy note with the button
+    await update.message.reply_text(privacy_note, reply_markup=reply_markup)
+    return USERNAME
+
+# Handle the user's agreement to the privacy note
+async def agree_to_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+
+    # Start the registration process
+    await query.edit_message_text("📝 بدأت عملية التسجيل!\nالرجاء إرسال اسم المستخدم الخاص بك:")
     return USERNAME
 
 # Set username
@@ -366,21 +373,12 @@ async def promote_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Error promoting user: {e}")
         await query.edit_message_text("❌ حدث خطأ أثناء ترقية المستخدم. الرجاء المحاولة مرة أخرى.")
 
-# Launch mini Telegram app
-async def launch_mini_app(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = [
-        [InlineKeyboardButton("فتح التطبيق المصغر", web_app={"url": WEB_APP_URL})]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🚀 اضغط على الزر أدناه لفتح التطبيق المصغر:", reply_markup=reply_markup)
-
 # Function to set bot commands
 async def set_bot_commands(application):
     commands = [
         ("start", "بدء التسجيل"),
         ("search", "البحث عن مستخدمين قريبين"),
         ("admin", "لوحة التحكم (للمشرفين فقط)"),
-        ("app", "فتح التطبيق المصغر"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -410,11 +408,11 @@ def main() -> None:
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
     application.add_handler(CommandHandler('admin', admin_panel))
-    application.add_handler(CommandHandler('app', launch_mini_app))
     application.add_handler(CallbackQueryHandler(admin_profile_actions, pattern="^admin_profile_"))
     application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
     application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
     application.add_handler(CallbackQueryHandler(promote_user, pattern="^promote_"))
+    application.add_handler(CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"))
 
     # Run the bot
     application.run_polling()
