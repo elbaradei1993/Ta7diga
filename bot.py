@@ -71,6 +71,7 @@ async def init_db():
                     photo TEXT,
                     country TEXT,
                     city TEXT,
+                    telegram_id INTEGER UNIQUE,  # Add this column
                     banned INTEGER DEFAULT 0,
                     frozen INTEGER DEFAULT 0,
                     admin INTEGER DEFAULT 0
@@ -244,7 +245,7 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         # Save user data to the database
         async with aiosqlite.connect(DATABASE) as db:
             await db.execute(
-                "INSERT OR REPLACE INTO users (id, username, name, age, bio, type, location, photo, country, city) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO users (id, username, name, age, bio, type, location, photo, country, city, telegram_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (update.message.from_user.id,
                  context.user_data['username'],
                  context.user_data['name'],
@@ -254,7 +255,8 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
                  context.user_data['location'],
                  context.user_data['photo'],
                  context.user_data['country'],
-                 context.user_data['city'])
+                 context.user_data['city'],
+                 update.message.from_user.id)  # Store Telegram ID
             )
             await db.commit()
 
@@ -290,6 +292,7 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
                         "age": row[3],
                         "type": row[5],
                         "city": row[9],
+                        "telegram_id": row[10],  # Add Telegram ID
                         "distance": distance
                     })
 
@@ -313,6 +316,44 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.error(f"Error in show_nearby_profiles: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء البحث. الرجاء المحاولة مرة أخرى.")
+
+# View profile
+async def view_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[1])  # Extract user ID from callback data
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+            user = await cursor.fetchone()
+
+            if user:
+                # Create a profile card
+                profile_text = (
+                    f"👤 الاسم: {user[2]}\n"
+                    f"📅 العمر: {user[3]}\n"
+                    f"🖋️ النبذة: {user[4]}\n"
+                    f"🔄 النوع: {user[5]}\n"
+                )
+
+                # Add location details only for admin
+                if query.from_user.id == ADMIN_ID:
+                    profile_text += f"📍 الموقع: [فتح في خرائط جوجل](https://www.google.com/maps?q={user[6]})\n"
+
+                profile_text += f"📸 الصورة: [عرض الصورة]({user[7]})"
+
+                # Create action buttons
+                keyboard = [
+                    [InlineKeyboardButton("📩 إرسال رسالة", url=f"tg://user?id={user[10]}")],  # Use Telegram's native message system
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+
+                # Send the profile card with action buttons
+                await query.edit_message_text(profile_text, reply_markup=reply_markup, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error in view_profile: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تحميل الملف الشخصي. الرجاء المحاولة مرة أخرى.")
 
 # Admin panel command
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -471,6 +512,7 @@ def main() -> None:
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
     application.add_handler(CommandHandler('admin', admin_panel))
+    application.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))  # Add this line
     application.add_handler(CallbackQueryHandler(admin_profile_actions, pattern="^admin_profile_"))
     application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
     application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
