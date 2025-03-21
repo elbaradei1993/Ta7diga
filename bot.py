@@ -24,7 +24,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BOT_TOKEN = "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak"
+BOT_TOKEN = "YOUR_BOT_TOKEN"
 DATABASE = "users.db"
 ADMINS = [1796978458]
 
@@ -111,7 +111,7 @@ async def main():
     app.add_handler(CallbackQueryHandler(delete_profile, pattern="^delete_profile$"))
     app.add_handler(CallbackQueryHandler(register_user, pattern="^skip_photo$"))
 
-    await app.bot.delete_webhook()
+    await app.bot.delete_webhook(drop_pending_updates=True)
     await app.run_polling()
 
 if __name__ == "__main__":
