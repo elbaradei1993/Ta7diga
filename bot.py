@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # Replace with your bot token
 DATABASE = os.getenv("DATABASE", "users.db")  # Database file
 ADMIN_ID = 1796978458  # Admin user ID
-WEB_APP_URL = "https://your-web-app-url.com"  # Replace with your web app URL
+WEB_APP_URL = "https://a7diga-mini-app-production.up.railway.app"  # Replace with your web app URL
 
 # Registration steps
 USERNAME, NAME, AGE, BIO, TYPE, LOCATION, PHOTO = range(7)
