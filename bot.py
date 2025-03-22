@@ -355,9 +355,17 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
                             f"📏 المسافة: {round(profile['distance'], 1)} كم\n"
                             f"📸 الصورة: [عرض الصورة]({profile['photo']})"
                         )
+
+                        # Add a "Send Message" button
+                        keyboard = [
+                            [InlineKeyboardButton("📩 إرسال رسالة", url=f"tg://user?id={profile['telegram_id']}")]
+                        ]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+
                         await update.message.reply_photo(
                             photo=profile['photo'],  # Send the profile picture
                             caption=profile_card,
+                            reply_markup=reply_markup,
                             parse_mode="Markdown"
                         )
     except Exception as e:
