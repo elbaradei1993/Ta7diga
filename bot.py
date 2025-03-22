@@ -21,7 +21,7 @@ from telegram.ext import (
 )
 import telegram.error
 import os
-import pandas as pd  # Add pandas for Excel export
+import pandas as pd  # For Excel export
 
 # Apply nest_asyncio for Jupyter/Notebook environments
 nest_asyncio.apply()
@@ -509,13 +509,19 @@ async def export_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 # Set bot commands
 async def set_bot_commands(application):
+    # Set commands for all users
     commands = [
         ("start", "بدء التسجيل"),
         ("search", "البحث عن مستخدمين قريبين"),
+    ]
+    await application.bot.set_my_commands(commands)
+
+    # Set additional commands for admin
+    admin_commands = [
         ("admin", "لوحة التحكم (للمشرفين فقط)"),
         ("export", "تصدير بيانات المستخدمين (للمشرفين فقط)"),
     ]
-    await application.bot.set_my_commands(commands)
+    await application.bot.set_my_commands(admin_commands, scope=telegram.BotCommandScopeChat(ADMIN_ID))
 
 # Main function
 async def main():
