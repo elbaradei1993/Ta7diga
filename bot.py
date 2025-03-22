@@ -84,25 +84,28 @@ async def init_db():
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
 
-# Start command (displays privacy note and starts registration)
+# Start command (displays welcome message and starts registration)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     logger.info("Start function called.")
     user_id = update.message.from_user.id
     logger.info(f"User {user_id} started registration.")
 
-    # Display the privacy note
-    privacy_note = (
-        "نود إعلامك أننا نحرص على حماية خصوصيتك باستخدام أفضل تقنيات التشفير والتخزين الآمن. "
-        "لن يتم مشاركة بياناتك مع أي أطراف خارجية.\n\n"
-        "اضغط على الزر أدناه لبدء التسجيل."
+    # Display the welcome message
+    welcome_message = (
+        "الأن مع تطبيق تحديقة الجديد تقدر تقابل, تتعرف و تتفاعل مع الناس بي راحتك, حسب الموقع بتاعك 😍\n\n"
+        "التطبيق بجيب ليك الناس القريبة منك لغاية 50 كيلو متر...\n"
+        "سجل في التطبيق و أبدا مقابلاتك الان...\n\n"
+        "التطبيق امن للأستخدام علي عكس التطبيقات الاخري, تقدر تمسحه بضغطة زر واحدة كأنه جزء من محادثاتك العادية "
+        "و ما بتحتاج تنزلو في التلفون, التطبيق جاهز علي برنامج تلجرام 😍\n\n"
+        "سجل الان!"
     )
 
     # Create a button to start registration
     keyboard = [[InlineKeyboardButton("بدء التسجيل", callback_data="agree_to_privacy")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Send the privacy note with the button
-    await update.message.reply_text(privacy_note, reply_markup=reply_markup)
+    # Send the welcome message with the button
+    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
     logger.info("Start function completed.")
     return USERNAME
 
