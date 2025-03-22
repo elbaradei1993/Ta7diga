@@ -253,7 +253,7 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         # Save user data to the database
         async with aiosqlite.connect(DATABASE) as db:
             await db.execute(
-                "INSERT OR REPLACE INTO users (id, username, name, age, bio, type, location, photo, country, city, telegram_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR IGNORE INTO users (id, username, name, age, bio, type, location, photo, country, city, telegram_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (update.message.from_user.id,
                  context.user_data['username'],
                  context.user_data['name'],
@@ -270,6 +270,9 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         await update.message.reply_text("✅ تم التسجيل بنجاح!")
 
+        # Notify admin about the new user
+        await notify_admin(update, context)
+
         # Automatically show nearby profiles after registration
         await show_nearby_profiles(update, context)
         return ConversationHandler.END
@@ -277,6 +280,21 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         logger.error(f"Error in set_photo: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء التسجيل. الرجاء المحاولة مرة أخرى.")
         return ConversationHandler.END
+
+# Notify admin about new user
+async def notify_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user = context.user_data
+    admin_message = (
+        f"👤 مستخدم جديد:\n"
+        f"الاسم: {user['name']}\n"
+        f"العمر: {user['age']}\n"
+        f"النوع: {user['type']}\n"
+        f"البلد: {user['country']}\n"
+        f"المدينة: {user['city']}\n"
+        f"الموقع: [فتح في خرائط جوجل](https://www.google.com/maps?q={user['location']})\n"
+        f"📸 الصورة: [عرض الصورة]({user['photo']})"
+    )
+    await context.bot.send_message(chat_id=ADMIN_ID, text=admin_message, parse_mode="Markdown")
 
 # Show nearby profiles
 async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -314,26 +332,31 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
 
                 # Create a grid of profile cards
                 profile_cards = []
-                for profile in profiles:
-                    if profile['distance'] <= 50:  # Only show profiles within 50 km
-                        profile_card = (
-                            f"👤 الاسم: {profile['name']}\n"
-                            f"📅 العمر: {profile['age']}\n"
-                            f"🔄 النوع: {profile['type']}\n"
-                            f"📍 المدينة: {profile['city']}, {profile['country']}\n"
-                            f"📏 المسافة: {round(profile['distance'], 1)} كم\n"
-                            f"📸 الصورة: [عرض الصورة]({profile['photo']})"
-                        )
-                        profile_cards.append(profile_card)
+                for profile in profiles[:50]:  # Show up to 50 profiles
+                    profile_card = (
+                        f"👤 الاسم: {profile['name']}\n"
+                        f"📅 العمر: {profile['age']}\n"
+                        f"🔄 النوع: {profile['type']}\n"
+                        f"📍 المدينة: {profile['city']}, {profile['country']}\n"
+                        f"📏 المسافة: {round(profile['distance'], 1)} كم\n"
+                    )
+                    if profile['photo']:
+                        profile_card += f"📸 الصورة: [عرض الصورة]({profile['photo']})"
+                    else:
+                        profile_card += "📸 الصورة: غير متوفرة"
+                    profile_cards.append(profile_card)
 
                 if profile_cards:
                     # Send profiles as a grid of messages
                     for card in profile_cards:
-                        await update.message.reply_photo(
-                            photo=profile['photo'],  # Send the profile picture
-                            caption=card,
-                            parse_mode="Markdown"
-                        )
+                        if profile['photo']:
+                            await update.message.reply_photo(
+                                photo=profile['photo'],  # Send the profile picture
+                                caption=card,
+                                parse_mode="Markdown"
+                            )
+                        else:
+                            await update.message.reply_text(card, parse_mode="Markdown")
                 else:
                     await update.message.reply_text("😔 لم يتم العثور على ملفات قريبة.")
     except Exception as e:
@@ -440,7 +463,6 @@ async def admin_profile_actions(update: Update, context: ContextTypes.DEFAULT_TY
                 keyboard = [
                     [InlineKeyboardButton("❌ حظر", callback_data=f"ban_{user[0]}")],
                     [InlineKeyboardButton("❄️ تجميد", callback_data=f"freeze_{user[0]}")],
-                    [InlineKeyboardButton("⭐ ترقية", callback_data=f"promote_{user[0]}")],
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
 
@@ -480,21 +502,6 @@ async def freeze_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         logger.error(f"Error freezing user: {e}")
         await query.edit_message_text("❌ حدث خطأ أثناء تجميد المستخدم. الرجاء المحاولة مرة أخرى.")
 
-# Promote user callback
-async def promote_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-
-    user_id = int(query.data.split('_')[1])  # Extract user ID from callback data
-    try:
-        async with aiosqlite.connect(DATABASE) as db:
-            await db.execute("UPDATE users SET admin = 1 WHERE id = ?", (user_id,))
-            await db.commit()
-        await query.edit_message_text(f"✅ تم ترقية المستخدم إلى مشرف بنجاح.")
-    except Exception as e:
-        logger.error(f"Error promoting user: {e}")
-        await query.edit_message_text("❌ حدث خطأ أثناء ترقية المستخدم. الرجاء المحاولة مرة أخرى.")
-
 # Export user data to Excel
 async def export_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.message.from_user.id
@@ -525,12 +532,47 @@ async def export_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Error exporting user data: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء تصدير بيانات المستخدمين. الرجاء المحاولة مرة أخرى.")
 
+# Broadcast message to all users
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة.")
+        return
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            async with db.execute("SELECT telegram_id FROM users") as cursor:
+                users = await cursor.fetchall()
+                for user in users:
+                    try:
+                        await context.bot.send_message(chat_id=user[0], text=update.message.text)
+                    except Exception as e:
+                        logger.error(f"Error sending message to user {user[0]}: {e}")
+        await update.message.reply_text("✅ تم إرسال الرسالة إلى جميع المستخدمين.")
+    except Exception as e:
+        logger.error(f"Error in broadcast: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء إرسال الرسالة. الرجاء المحاولة مرة أخرى.")
+
+# Handle user feedback
+async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    feedback_text = update.message.text
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"📝 تعليق جديد:\n{feedback_text}")
+    await update.message.reply_text("✅ تم استلام تعليقك. شكراً لك!")
+
+# Handle user reports
+async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    report_text = update.message.text
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"🚨 تقرير جديد:\n{report_text}")
+    await update.message.reply_text("✅ تم استلام تقريرك. شكراً لك!")
+
 # Set bot commands
 async def set_bot_commands(application):
     # Set commands for all users
     commands = [
         ("start", "بدء التسجيل"),
         ("search", "البحث عن مستخدمين قريبين"),
+        ("feedback", "إرسال تعليق"),
+        ("report", "الإبلاغ عن مستخدم"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -538,6 +580,7 @@ async def set_bot_commands(application):
     admin_commands = [
         ("admin", "لوحة التحكم (للمشرفين فقط)"),
         ("export", "تصدير بيانات المستخدمين (للمشرفين فقط)"),
+        ("broadcast", "إرسال رسالة إلى جميع المستخدمين (للمشرفين فقط)"),
     ]
     await application.bot.set_my_commands(admin_commands, scope=telegram.BotCommandScopeChat(ADMIN_ID))
 
@@ -567,11 +610,13 @@ async def main():
     application.add_handler(CommandHandler('search', show_nearby_profiles))
     application.add_handler(CommandHandler('admin', admin_panel))
     application.add_handler(CommandHandler('export', export_users))  # Add export command
+    application.add_handler(CommandHandler('broadcast', broadcast))  # Add broadcast command
+    application.add_handler(CommandHandler('feedback', feedback))  # Add feedback command
+    application.add_handler(CommandHandler('report', report_user))  # Add report command
     application.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))
     application.add_handler(CallbackQueryHandler(admin_profile_actions, pattern="^admin_profile_"))
     application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
     application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
-    application.add_handler(CallbackQueryHandler(promote_user, pattern="^promote_"))
     application.add_handler(CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"))
 
     # Set bot commands
