@@ -21,6 +21,7 @@ from telegram.ext import (
 )
 import telegram.error
 import os
+import pandas as pd  # Add pandas for Excel export
 
 # Apply nest_asyncio for Jupyter/Notebook environments
 nest_asyncio.apply()
@@ -476,12 +477,43 @@ async def promote_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         logger.error(f"Error promoting user: {e}")
         await query.edit_message_text("❌ حدث خطأ أثناء ترقية المستخدم. الرجاء المحاولة مرة أخرى.")
 
+# Export user data to Excel
+async def export_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة.")
+        return
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            # Fetch all user data
+            cursor = await db.execute("SELECT * FROM users")
+            rows = await cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+
+            # Convert to a pandas DataFrame
+            df = pd.DataFrame(rows, columns=columns)
+
+            # Save the DataFrame to an Excel file
+            excel_file = "users_data.xlsx"
+            df.to_excel(excel_file, index=False)
+
+            # Send the Excel file to the admin
+            with open(excel_file, "rb") as file:
+                await update.message.reply_document(document=file, caption="📊 بيانات المستخدمين")
+
+            logger.info(f"User data exported by admin {user_id}.")
+    except Exception as e:
+        logger.error(f"Error exporting user data: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تصدير بيانات المستخدمين. الرجاء المحاولة مرة أخرى.")
+
 # Set bot commands
 async def set_bot_commands(application):
     commands = [
         ("start", "بدء التسجيل"),
         ("search", "البحث عن مستخدمين قريبين"),
         ("admin", "لوحة التحكم (للمشرفين فقط)"),
+        ("export", "تصدير بيانات المستخدمين (للمشرفين فقط)"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -510,6 +542,7 @@ async def main():
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
     application.add_handler(CommandHandler('admin', admin_panel))
+    application.add_handler(CommandHandler('export', export_users))  # Add export command
     application.add_handler(CallbackQueryHandler(view_profile, pattern="^profile_"))
     application.add_handler(CallbackQueryHandler(admin_profile_actions, pattern="^admin_profile_"))
     application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
