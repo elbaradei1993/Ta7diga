@@ -658,9 +658,9 @@ async def main():
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
             BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-            TYPE: [CallbackQueryHandler(set_type)],
-            COUNTRY: [CallbackQueryHandler(set_country)],
-            CITY: [CallbackQueryHandler(set_city)],
+            TYPE: [CallbackQueryHandler(set_type, per_message=True)],  # Add per_message=True
+            COUNTRY: [CallbackQueryHandler(set_country, per_message=True)],  # Add per_message=True
+            CITY: [CallbackQueryHandler(set_city, per_message=True)],  # Add per_message=True
             LOCATION: [MessageHandler(filters.LOCATION, set_location)],
             PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
         },
@@ -670,7 +670,7 @@ async def main():
     # Add handlers
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
-    application.add_handler(CommandHandler('edit', edit_profile))
+    application.add_handler(CommandHandler('edit', edit_profile))  # Add edit profile handler
     application.add_handler(CommandHandler('feedback', feedback))
     application.add_handler(CommandHandler('report', report_user))
     application.add_handler(CommandHandler('admin', admin_panel))
