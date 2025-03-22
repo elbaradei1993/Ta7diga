@@ -688,9 +688,9 @@ async def main():
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
             BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-            TYPE: [CallbackQueryHandler(set_type, per_message=True)],  # Add per_message=True
-            COUNTRY: [CallbackQueryHandler(set_country, per_message=True)],  # Add per_message=True
-            CITY: [CallbackQueryHandler(set_city, per_message=True)],  # Add per_message=True
+            TYPE: [CallbackQueryHandler(set_type)],  # Removed per_message=True
+            COUNTRY: [CallbackQueryHandler(set_country)],  # Removed per_message=True
+            CITY: [CallbackQueryHandler(set_city)],  # Removed per_message=True
             LOCATION: [MessageHandler(filters.LOCATION, set_location)],
             PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
         },
