@@ -281,9 +281,8 @@ async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 # Show nearby profiles
 async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_location = context.user_data.get('location')
-    user_city = context.user_data.get('city')
-    if not user_location or not user_city:
-        await update.message.reply_text("❗ الرجاء التسجيل أولاً باستخدام /start لتحديد موقعك ومدينتك.")
+    if not user_location:
+        await update.message.reply_text("❗ الرجاء التسجيل أولاً باستخدام /start لتحديد موقعك.")
         return
 
     user_coords = tuple(map(float, user_location.split(',')))
@@ -293,32 +292,48 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
                 profiles = []
                 async for row in cursor:
                     profile_coords = tuple(map(float, row[6].split(',')))
-                    distance = geodesic(user_coords, profile_coords).km
+                    distance = geodesic(user_coords, profile_coords).km  # Calculate distance in kilometers
                     profiles.append({
                         "id": row[0],
                         "name": row[2],
                         "age": row[3],
                         "type": row[5],
                         "city": row[9],
+                        "country": row[8],
+                        "photo": row[7],  # Add profile photo
                         "telegram_id": row[10],  # Add Telegram ID
                         "distance": distance
                     })
 
-                # Sort profiles: same city first, then by distance
-                profiles.sort(key=lambda x: (x['city'] != user_city, x['distance']))
+                if not profiles:
+                    await update.message.reply_text("😔 لا يوجد مستخدمون مسجلون.")
+                    return
 
-                # Create buttons for nearby profiles
-                keyboard = []
+                # Sort profiles by distance (nearest first)
+                profiles.sort(key=lambda x: x['distance'])
+
+                # Create a grid of profile cards
+                profile_cards = []
                 for profile in profiles:
                     if profile['distance'] <= 50:  # Only show profiles within 50 km
-                        button_text = f"{profile['name']}, {profile['age']} سنة - {profile['type']} ({round(profile['distance'], 1)} كم)"
-                        if profile['city'] == user_city:
-                            button_text += " 🏙️"
-                        keyboard.append([InlineKeyboardButton(button_text, callback_data=f"profile_{profile['id']}")])
+                        profile_card = (
+                            f"👤 الاسم: {profile['name']}\n"
+                            f"📅 العمر: {profile['age']}\n"
+                            f"🔄 النوع: {profile['type']}\n"
+                            f"📍 المدينة: {profile['city']}, {profile['country']}\n"
+                            f"📏 المسافة: {round(profile['distance'], 1)} كم\n"
+                            f"📸 الصورة: [عرض الصورة]({profile['photo']})"
+                        )
+                        profile_cards.append(profile_card)
 
-                if keyboard:
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                    await update.message.reply_text("🔍 المستخدمون القريبون منك:", reply_markup=reply_markup)
+                if profile_cards:
+                    # Send profiles as a grid of messages
+                    for card in profile_cards:
+                        await update.message.reply_photo(
+                            photo=profile['photo'],  # Send the profile picture
+                            caption=card,
+                            parse_mode="Markdown"
+                        )
                 else:
                     await update.message.reply_text("😔 لم يتم العثور على ملفات قريبة.")
     except Exception as e:
