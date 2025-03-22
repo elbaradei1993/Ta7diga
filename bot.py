@@ -626,6 +626,36 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Display the main menu
     await start(update, context)
 
+# Edit profile command
+async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.message.from_user.id
+    logger.info(f"User {user_id} requested to edit profile.")
+
+    # Check if the user is registered
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users WHERE telegram_id = ?", (user_id,))
+            user = await cursor.fetchone()
+            if not user:
+                await update.message.reply_text("❌ أنت غير مسجل. الرجاء استخدام /start للتسجيل.")
+                return ConversationHandler.END
+
+            # Show edit options
+            keyboard = [
+                [InlineKeyboardButton("تعديل الاسم", callback_data="edit_name")],
+                [InlineKeyboardButton("تعديل العمر", callback_data="edit_age")],
+                [InlineKeyboardButton("تعديل النبذة", callback_data="edit_bio")],
+                [InlineKeyboardButton("تعديل البلد", callback_data="edit_country")],
+                [InlineKeyboardButton("تعديل المدينة", callback_data="edit_city")],
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("اختر ما تريد تعديله:", reply_markup=reply_markup)
+            return EDIT_CHOICE
+    except Exception as e:
+        logger.error(f"Error in edit_profile: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحميل الملف الشخصي. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
 # Set bot commands
 async def set_bot_commands(application):
     # Set commands for all users
@@ -658,9 +688,9 @@ async def main():
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
             BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-            TYPE: [CallbackQueryHandler(set_type)],  # Removed per_message=True
-            COUNTRY: [CallbackQueryHandler(set_country)],  # Removed per_message=True
-            CITY: [CallbackQueryHandler(set_city)],  # Removed per_message=True
+            TYPE: [CallbackQueryHandler(set_type, per_message=True)],  # Add per_message=True
+            COUNTRY: [CallbackQueryHandler(set_country, per_message=True)],  # Add per_message=True
+            CITY: [CallbackQueryHandler(set_city, per_message=True)],  # Add per_message=True
             LOCATION: [MessageHandler(filters.LOCATION, set_location)],
             PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
         },
