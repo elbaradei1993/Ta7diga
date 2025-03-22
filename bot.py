@@ -100,13 +100,47 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         "سجل الان!"
     )
 
-    # Create a button to start registration
-    keyboard = [[InlineKeyboardButton("بدء التسجيل", callback_data="agree_to_privacy")]]
+    # Create a menu with inline buttons
+    keyboard = [
+        [InlineKeyboardButton("بدء التسجيل", callback_data="agree_to_privacy")],
+        [InlineKeyboardButton("المستخدمون القريبون", callback_data="nearby_users")],
+        [InlineKeyboardButton("تعديل الملف الشخصي", callback_data="edit_profile")],
+        [InlineKeyboardButton("الإبلاغ عن مستخدم", callback_data="report_user")],
+        [InlineKeyboardButton("إرسال تعليق", callback_data="send_feedback")],
+        [InlineKeyboardButton("تحديث", callback_data="refresh")],
+        [InlineKeyboardButton("رجوع", callback_data="go_back")]
+    ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # Send the welcome message with the button
+    # Send the welcome message with the menu
     await update.message.reply_text(welcome_message, reply_markup=reply_markup)
     logger.info("Start function completed.")
+    return USERNAME
+
+# Handle menu button clicks
+async def handle_menu_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "nearby_users":
+        await show_nearby_profiles(update, context)
+    elif query.data == "edit_profile":
+        await edit_profile(update, context)
+    elif query.data == "report_user":
+        await report_user(update, context)
+    elif query.data == "send_feedback":
+        await feedback(update, context)
+    elif query.data == "refresh":
+        await start(update, context)
+    elif query.data == "go_back":
+        await start(update, context)
+
+# Edit profile
+async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    await query.edit_message_text("📝 تعديل الملف الشخصي:\nالرجاء إرسال اسم المستخدم الجديد:")
     return USERNAME
 
 # Handle the user's agreement to the privacy note
@@ -618,6 +652,7 @@ async def main():
     application.add_handler(CallbackQueryHandler(ban_user, pattern="^ban_"))
     application.add_handler(CallbackQueryHandler(freeze_user, pattern="^freeze_"))
     application.add_handler(CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"))
+    application.add_handler(CallbackQueryHandler(handle_menu_buttons))  # Add handler for menu buttons
 
     # Set bot commands
     await set_bot_commands(application)
