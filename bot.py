@@ -61,6 +61,9 @@ USERNAME, NAME, AGE, BIO, TYPE, COUNTRY, CITY, LOCATION, PHOTO = range(9)
 # Edit profile steps
 EDIT_CHOICE, EDIT_NAME, EDIT_AGE, EDIT_BIO, EDIT_COUNTRY, EDIT_CITY = range(6)
 
+# Feedback and report steps
+FEEDBACK, REPORT = range(2)
+
 # Initialize the database
 async def init_db():
     try:
@@ -591,40 +594,38 @@ async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         context.user_data['awaiting_broadcast'] = False
 
 # Feedback command
-async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("📝 الرجاء إرسال تعليقك:")
-    context.user_data['awaiting_feedback'] = True
+    return FEEDBACK
 
 # Handle feedback
-async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.user_data.get('awaiting_feedback'):
-        feedback_text = update.message.text.strip()
-        if not feedback_text:
-            await update.message.reply_text("❌ الرجاء إدخال تعليق صحيح.")
-            return
+async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    feedback_text = update.message.text.strip()
+    if not feedback_text:
+        await update.message.reply_text("❌ الرجاء إدخال تعليق صحيح.")
+        return FEEDBACK
 
-        # Send feedback to admin
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"📝 تعليق جديد:\n{feedback_text}")
-        await update.message.reply_text("✅ تم استلام تعليقك. شكراً لك!")
-        context.user_data['awaiting_feedback'] = False
+    # Send feedback to admin
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"📝 تعليق جديد:\n{feedback_text}")
+    await update.message.reply_text("✅ تم استلام تعليقك. شكراً لك!")
+    return ConversationHandler.END
 
 # Report user command
-async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text("🚨 الرجاء إرسال تقريرك:")
-    context.user_data['awaiting_report'] = True
+    return REPORT
 
 # Handle report
-async def handle_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if context.user_data.get('awaiting_report'):
-        report_text = update.message.text.strip()
-        if not report_text:
-            await update.message.reply_text("❌ الرجاء إدخال تقرير صحيح.")
-            return
+async def handle_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    report_text = update.message.text.strip()
+    if not report_text:
+        await update.message.reply_text("❌ الرجاء إدخال تقرير صحيح.")
+        return REPORT
 
-        # Send report to admin
-        await context.bot.send_message(chat_id=ADMIN_ID, text=f"🚨 تقرير جديد:\n{report_text}")
-        await update.message.reply_text("✅ تم استلام تقريرك. شكراً لك!")
-        context.user_data['awaiting_report'] = False
+    # Send report to admin
+    await context.bot.send_message(chat_id=ADMIN_ID, text=f"🚨 تقرير جديد:\n{report_text}")
+    await update.message.reply_text("✅ تم استلام تقريرك. شكراً لك!")
+    return ConversationHandler.END
 
 # Main menu button
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -662,6 +663,142 @@ async def edit_profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     except Exception as e:
         logger.error(f"Error in edit_profile: {e}")
         await update.message.reply_text("❌ حدث خطأ أثناء تحميل الملف الشخصي. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
+# Edit name
+async def edit_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("📝 الرجاء إرسال اسمك الجديد:")
+    return EDIT_NAME
+
+# Handle edit name
+async def handle_edit_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    new_name = update.message.text.strip()
+    if not new_name:
+        await update.message.reply_text("❌ الرجاء إدخال اسم صحيح.")
+        return EDIT_NAME
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET name = ? WHERE telegram_id = ?", (new_name, update.message.from_user.id))
+            await db.commit()
+        await update.message.reply_text("✅ تم تحديث الاسم بنجاح!")
+        return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error updating name: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحديث الاسم. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
+# Edit age
+async def edit_age(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("📅 الرجاء إرسال عمرك الجديد:")
+    return EDIT_AGE
+
+# Handle edit age
+async def handle_edit_age(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    try:
+        new_age = int(update.message.text.strip())
+        if new_age < 18 or new_age > 100:
+            await update.message.reply_text("❌ الرجاء إدخال عمر صحيح بين 18 و 100.")
+            return EDIT_AGE
+
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET age = ? WHERE telegram_id = ?", (new_age, update.message.from_user.id))
+            await db.commit()
+        await update.message.reply_text("✅ تم تحديث العمر بنجاح!")
+        return ConversationHandler.END
+    except ValueError:
+        await update.message.reply_text("❌ الرجاء إدخال عمر صحيح.")
+        return EDIT_AGE
+    except Exception as e:
+        logger.error(f"Error updating age: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحديث العمر. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
+# Edit bio
+async def edit_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("🖋️ الرجاء إرسال نبذتك الجديدة:")
+    return EDIT_BIO
+
+# Handle edit bio
+async def handle_edit_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    new_bio = update.message.text.strip()
+    if not new_bio:
+        await update.message.reply_text("❌ الرجاء إدخال نبذة صحيحة.")
+        return EDIT_BIO
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET bio = ? WHERE telegram_id = ?", (new_bio, update.message.from_user.id))
+            await db.commit()
+        await update.message.reply_text("✅ تم تحديث النبذة بنجاح!")
+        return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error updating bio: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحديث النبذة. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
+# Edit country
+async def edit_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Create buttons for countries
+    keyboard = [[InlineKeyboardButton(country, callback_data=f"edit_country_{country}")] for country in COUNTRIES.keys()]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("🌍 اختر بلدك الجديد:", reply_markup=reply_markup)
+    return EDIT_COUNTRY
+
+# Handle edit country
+async def handle_edit_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    new_country = query.data.split('_')[2]  # Extract country name from callback data
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET country = ? WHERE telegram_id = ?", (new_country, query.from_user.id))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم تحديث البلد إلى: {new_country}")
+        return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error updating country: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تحديث البلد. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
+# Edit city
+async def edit_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    # Get the user's current country
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT country FROM users WHERE telegram_id = ?", (update.message.from_user.id,))
+            user = await cursor.fetchone()
+            if not user:
+                await update.message.reply_text("❌ أنت غير مسجل. الرجاء استخدام /start للتسجيل.")
+                return ConversationHandler.END
+
+            country = user[0]
+            # Create buttons for cities in the selected country
+            keyboard = [[InlineKeyboardButton(city, callback_data=f"edit_city_{city}")] for city in COUNTRIES[country]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await update.message.reply_text("🏙️ اختر مدينتك الجديدة:", reply_markup=reply_markup)
+            return EDIT_CITY
+    except Exception as e:
+        logger.error(f"Error in edit_city: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحميل المدن. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
+# Handle edit city
+async def handle_edit_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    new_city = query.data.split('_')[2]  # Extract city name from callback data
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET city = ? WHERE telegram_id = ?", (new_city, query.from_user.id))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم تحديث المدينة إلى: {new_city}")
+        return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error updating city: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تحديث المدينة. الرجاء المحاولة مرة أخرى.")
         return ConversationHandler.END
 
 # Set bot commands
@@ -705,12 +842,50 @@ async def main():
         fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
     )
 
+    # Conversation handler for editing profile
+    edit_handler = ConversationHandler(
+        entry_points=[CommandHandler('edit', edit_profile)],
+        states={
+            EDIT_CHOICE: [
+                CallbackQueryHandler(edit_name, pattern="^edit_name$"),
+                CallbackQueryHandler(edit_age, pattern="^edit_age$"),
+                CallbackQueryHandler(edit_bio, pattern="^edit_bio$"),
+                CallbackQueryHandler(edit_country, pattern="^edit_country$"),
+                CallbackQueryHandler(edit_city, pattern="^edit_city$"),
+            ],
+            EDIT_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_edit_name)],
+            EDIT_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_edit_age)],
+            EDIT_BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_edit_bio)],
+            EDIT_COUNTRY: [CallbackQueryHandler(handle_edit_country, pattern="^edit_country_")],
+            EDIT_CITY: [CallbackQueryHandler(handle_edit_city, pattern="^edit_city_")],
+        },
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+    )
+
+    # Conversation handler for feedback
+    feedback_handler = ConversationHandler(
+        entry_points=[CommandHandler('feedback', feedback)],
+        states={
+            FEEDBACK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_feedback)],
+        },
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+    )
+
+    # Conversation handler for reporting
+    report_handler = ConversationHandler(
+        entry_points=[CommandHandler('report', report_user)],
+        states={
+            REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_report)],
+        },
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+    )
+
     # Add handlers
     application.add_handler(conv_handler)
+    application.add_handler(edit_handler)
+    application.add_handler(feedback_handler)
+    application.add_handler(report_handler)
     application.add_handler(CommandHandler('search', show_nearby_profiles))
-    application.add_handler(CommandHandler('edit', edit_profile))  # Add edit profile handler
-    application.add_handler(CommandHandler('feedback', feedback))
-    application.add_handler(CommandHandler('report', report_user))
     application.add_handler(CommandHandler('admin', admin_panel))
     application.add_handler(CommandHandler('export', export_users))
     application.add_handler(CommandHandler('broadcast', broadcast))
