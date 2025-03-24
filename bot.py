@@ -610,12 +610,14 @@ async def handle_view_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 cursor = await db.execute(
                     "SELECT * FROM users WHERE username = ?",
                     (user_input[1:],)
+                )
             else:
                 try:
                     user_id = int(user_input)
                     cursor = await db.execute(
                         "SELECT * FROM users WHERE telegram_id = ? OR id = ?",
-                        (user_id, user_id))
+                        (user_id, user_id)
+                    )
                 except ValueError:
                     await update.message.reply_text("❌ الرجاء إدخال معرف صحيح أو اسم مستخدم")
                     return "view_user"
