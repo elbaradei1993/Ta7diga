@@ -118,7 +118,506 @@ async def init_db():
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
 
-# [Previous functions remain unchanged until main()]
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    logger.info("Start function called.")
+    user_id = update.message.from_user.id
+    logger.info(f"User {user_id} started registration.")
+
+    # Check if user is already registered
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT id FROM users WHERE telegram_id = ?", (user_id,))
+            existing_user = await cursor.fetchone()
+            if existing_user:
+                await update.message.reply_text("✅ أنت مسجل بالفعل. يمكنك استخدام /search للبحث عن مستخدمين قريبين.")
+                return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error checking user registration: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء التحقق من تسجيلك. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
+    # Display the welcome message
+    welcome_message = (
+        "الأن مع تطبيق تحديقة الجديد تقدر تقابل, تتعرف و تتفاعل مع الناس بي راحتك, حسب الموقع بتاعك 😍\n\n"
+        "التطبيق بجيب ليك الناس القريبة منك لغاية 50 كيلو متر...\n"
+        "سجل في التطبيق و أبدا مقابلاتك الان...\n\n"
+        "التطبيق امن للأستخدام علي عكس التطبيقات الاخري, تقدر تمسحه بضغطة زر واحدة كأنه جزء من محادثاتك العادية "
+        "و ما بتحتاج تنزلو في التلفون, التطبيق جاهز علي برنامج تلجرام 😍\n\n"
+        "سجل الان!"
+    )
+
+    # Create a button to start registration
+    keyboard = [[InlineKeyboardButton("بدء التسجيل", callback_data="agree_to_privacy")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Send the welcome message with the button
+    await update.message.reply_text(welcome_message, reply_markup=reply_markup)
+    logger.info("Start function completed.")
+    return USERNAME
+
+async def agree_to_privacy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    await query.edit_message_text("📝 بدأت عملية التسجيل!\nالرجاء إرسال اسم المستخدم الخاص بك:")
+    return USERNAME
+
+async def set_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    username = update.message.text.strip()
+    if not username:
+        await update.message.reply_text("❌ الرجاء إدخال اسم مستخدم صحيح.")
+        return USERNAME
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT id FROM users WHERE username = ?", (username,))
+            existing_user = await cursor.fetchone()
+            if existing_user:
+                await update.message.reply_text("❌ اسم المستخدم موجود بالفعل. الرجاء اختيار اسم آخر.")
+                return USERNAME
+
+            context.user_data['username'] = username
+            await update.message.reply_text("💬 الآن أرسل اسمك الكامل:")
+            return NAME
+    except Exception as e:
+        logger.error(f"Error checking username: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء التحقق من اسم المستخدم. الرجاء المحاولة مرة أخرى.")
+        return USERNAME
+
+async def set_name(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    name = update.message.text.strip()
+    if not name:
+        await update.message.reply_text("❌ الرجاء إدخال اسم صحيح.")
+        return NAME
+
+    context.user_data['name'] = name
+    await update.message.reply_text("📅 الآن أرسل عمرك:")
+    return AGE
+
+async def set_age(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    try:
+        age = int(update.message.text.strip())
+        if age < 18 or age > 100:
+            await update.message.reply_text("❌ الرجاء إدخال عمر صحيح بين 18 و 100.")
+            return AGE
+        context.user_data['age'] = age
+        await update.message.reply_text("🖋️ الآن أرسل نبذة قصيرة عنك:")
+        return BIO
+    except ValueError:
+        await update.message.reply_text("❌ الرجاء إدخال عمر صحيح.")
+        return AGE
+
+async def set_bio(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    bio = update.message.text.strip()
+    if not bio:
+        await update.message.reply_text("❌ الرجاء إدخال نبذة صحيحة.")
+        return BIO
+
+    context.user_data['bio'] = bio
+    keyboard = [
+        [InlineKeyboardButton("سالب", callback_data="سالب")],
+        [InlineKeyboardButton("موجب", callback_data="موجب")],
+        [InlineKeyboardButton("مبادل", callback_data="مبادل")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("🔄 اختر النوع الخاص بك:", reply_markup=reply_markup)
+    return TYPE
+
+async def set_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    context.user_data['type'] = query.data
+    await query.edit_message_text(f"✅ تم اختيار النوع: {query.data}")
+
+    keyboard = [[InlineKeyboardButton(country, callback_data=f"country_{country}")] for country in COUNTRIES.keys()]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.message.reply_text("🌍 اختر بلدك:", reply_markup=reply_markup)
+    return COUNTRY
+
+async def set_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    country = query.data.split('_')[1]
+    context.user_data['country'] = country
+
+    keyboard = [[InlineKeyboardButton(city, callback_data=f"city_{city}")] for city in COUNTRIES[country]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await query.edit_message_text(f"✅ تم اختيار البلد: {country}")
+    await query.message.reply_text("🏙️ اختر مدينتك:", reply_markup=reply_markup)
+    return CITY
+
+async def set_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    city = query.data.split('_')[1]
+    context.user_data['city'] = city
+    await query.edit_message_text(f"✅ تم اختيار المدينة: {city}")
+    await query.message.reply_text("📍 الآن أرسل موقعك بمشاركته مباشرة من هاتفك:")
+    return LOCATION
+
+async def set_location(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    if update.message.location:
+        lat = update.message.location.latitude
+        lon = update.message.location.longitude
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            context.user_data['location'] = f"{lat},{lon}"
+            await update.message.reply_text("📷 الآن أرسل صورتك الشخصية:")
+            return PHOTO
+        else:
+            await update.message.reply_text("❌ الرجاء مشاركة موقع صحيح.")
+            return LOCATION
+    else:
+        await update.message.reply_text("❌ الرجاء مشاركة موقعك باستخدام زر الموقع في هاتفك.")
+        return LOCATION
+
+async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    try:
+        if not update.message.photo:
+            await update.message.reply_text("❌ الرجاء إرسال صورة صحيحة.")
+            return PHOTO
+
+        photo_file = update.message.photo[-1].file_id
+        context.user_data['photo'] = photo_file
+
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute(
+                "INSERT INTO users (id, username, name, age, bio, type, location, photo, country, city, telegram_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (update.message.from_user.id,
+                 context.user_data['username'],
+                 context.user_data['name'],
+                 context.user_data['age'],
+                 context.user_data['bio'],
+                 context.user_data['type'],
+                 context.user_data['location'],
+                 context.user_data['photo'],
+                 context.user_data['country'],
+                 context.user_data['city'],
+                 update.message.from_user.id)
+            )
+            await db.commit()
+
+        await update.message.reply_text("✅ تم التسجيل بنجاح!")
+        await notify_admin(update, context)
+        await show_nearby_profiles(update, context)
+        return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error in set_photo: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء التسجيل. الرجاء المحاولة مرة أخرى.")
+        return ConversationHandler.END
+
+async def notify_admin(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        user_data = context.user_data
+        message = (
+            "👤 مستخدم جديد مسجل:\n\n"
+            f"الاسم: {user_data['name']}\n"
+            f"العمر: {user_data['age']}\n"
+            f"النوع: {user_data['type']}\n"
+            f"البلد: {user_data['country']}\n"
+            f"المدينة: {user_data['city']}\n"
+            f"الموقع: {user_data['location']}\n"
+            f"معرف التليجرام: {update.message.from_user.id}"
+        )
+        await context.bot.send_message(chat_id=ADMIN_ID, text=message)
+    except Exception as e:
+        logger.error(f"Error notifying admin: {e}")
+
+async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT location FROM users WHERE telegram_id = ?", (update.message.from_user.id,))
+            user_location = await cursor.fetchone()
+            if not user_location or not user_location[0]:
+                await update.message.reply_text("❗ الرجاء التسجيل أولاً باستخدام /start لتحديد موقعك.")
+                return
+
+            user_coords = tuple(map(float, user_location[0].split(',')))
+            async with db.execute("SELECT * FROM users WHERE id != ? AND banned = 0", (update.message.from_user.id,)) as cursor:
+                profiles = []
+                async for row in cursor:
+                    if not row[6]:  # Skip if no location
+                        continue
+                    profile_coords = tuple(map(float, row[6].split(',')))
+                    distance = geodesic(user_coords, profile_coords).km
+                    profiles.append({
+                        "id": row[0],
+                        "name": row[2],
+                        "age": row[3],
+                        "type": row[5],
+                        "city": row[9],
+                        "country": row[8],
+                        "photo": row[7],
+                        "telegram_id": row[10],
+                        "distance": distance
+                    })
+
+                if not profiles:
+                    await update.message.reply_text("😔 لا يوجد مستخدمون مسجلون.")
+                    return
+
+                profiles.sort(key=lambda x: x['distance'])
+
+                for profile in profiles:
+                    if profile['distance'] <= 50:
+                        profile_card = (
+                            f"👤 الاسم: {profile['name']}\n"
+                            f"📅 العمر: {profile['age']}\n"
+                            f"🔄 النوع: {profile['type']}\n"
+                            f"📍 المدينة: {profile['city']}, {profile['country']}\n"
+                            f"📏 المسافة: {round(profile['distance'], 1)} كم"
+                        )
+
+                        keyboard = [
+                            [InlineKeyboardButton("📩 إرسال رسالة", url=f"tg://user?id={profile['telegram_id']}")]
+                        ]
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+
+                        await update.message.reply_photo(
+                            photo=profile['photo'],
+                            caption=profile_card,
+                            reply_markup=reply_markup
+                        )
+    except Exception as e:
+        logger.error(f"Error in show_nearby_profiles: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء البحث. الرجاء المحاولة مرة أخرى.")
+
+async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى لوحة التحكم.")
+        return
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            async with db.execute("SELECT COUNT(*) FROM users") as cursor:
+                count = await cursor.fetchone()
+                if count[0] == 0:
+                    await update.message.reply_text("😔 لا يوجد مستخدمون مسجلون.")
+                    return
+
+            async with db.execute("SELECT * FROM users") as cursor:
+                keyboard = []
+                async for row in cursor:
+                    keyboard.append([InlineKeyboardButton(f"👤 {row[2]}", callback_data=f"admin_profile_{row[0]}")])
+
+                if keyboard:
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    await update.message.reply_text("👤 المستخدمون المسجلون:", reply_markup=reply_markup)
+                else:
+                    await update.message.reply_text("😔 لا يوجد مستخدمون مسجلون.")
+    except Exception as e:
+        logger.error(f"Error in admin_panel: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تحميل لوحة التحكم. الرجاء المحاولة مرة أخرى.")
+
+async def admin_profile_actions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[2])
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+            user = await cursor.fetchone()
+
+            if user:
+                profile_text = (
+                    f"👤 الاسم: {user[2]}\n"
+                    f"📅 العمر: {user[3]}\n"
+                    f"🖋️ النبذة: {user[4]}\n"
+                    f"🔄 النوع: {user[5]}\n"
+                    f"📍 الموقع: [فتح في خرائط جوجل](https://www.google.com/maps?q={user[6]})\n"
+                    f"📸 الصورة: [عرض الصورة]({user[7]})"
+                )
+
+                keyboard = [
+                    [InlineKeyboardButton("❌ حظر", callback_data=f"ban_{user[0]}")],
+                    [InlineKeyboardButton("❄️ تجميد", callback_data=f"freeze_{user[0]}")],
+                    [InlineKeyboardButton("⭐ ترقية", callback_data=f"promote_{user[0]}")],
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+
+                await query.edit_message_text(profile_text, reply_markup=reply_markup, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error in admin_profile_actions: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تحميل الملف الشخصي. الرجاء المحاولة مرة أخرى.")
+
+async def ban_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[1])
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET banned = 1 WHERE id = ?", (user_id,))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم حظر المستخدم بنجاح.")
+    except Exception as e:
+        logger.error(f"Error banning user: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء حظر المستخدم. الرجاء المحاولة مرة أخرى.")
+
+async def freeze_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[1])
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET frozen = 1 WHERE id = ?", (user_id,))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم تجميد المستخدم بنجاح.")
+    except Exception as e:
+        logger.error(f"Error freezing user: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تجميد المستخدم. الرجاء المحاولة مرة أخرى.")
+
+async def promote_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    user_id = int(query.data.split('_')[1])
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute("UPDATE users SET admin = 1 WHERE id = ?", (user_id,))
+            await db.commit()
+        await query.edit_message_text(f"✅ تم ترقية المستخدم إلى مشرف بنجاح.")
+    except Exception as e:
+        logger.error(f"Error promoting user: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء ترقية المستخدم. الرجاء المحاولة مرة أخرى.")
+
+async def export_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة.")
+        return
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users")
+            rows = await cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+
+            df = pd.DataFrame(rows, columns=columns)
+            excel_file = "users_data.xlsx"
+            df.to_excel(excel_file, index=False)
+
+            with open(excel_file, "rb") as file:
+                await update.message.reply_document(document=file, caption="📊 بيانات المستخدمين")
+
+            os.remove(excel_file)
+            logger.info(f"User data exported by admin {user_id}.")
+    except Exception as e:
+        logger.error(f"Error exporting user data: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء تصدير بيانات المستخدمين. الرجاء المحاولة مرة أخرى.")
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة.")
+        return
+
+    await update.message.reply_text("📢 الرجاء إرسال الرسالة التي تريد بثها:")
+    context.user_data['awaiting_broadcast'] = True
+
+async def handle_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if context.user_data.get('awaiting_broadcast'):
+        broadcast_text = update.message.text.strip()
+        if not broadcast_text:
+            await update.message.reply_text("❌ الرجاء إدخال رسالة صحيحة.")
+            return
+
+        try:
+            async with aiosqlite.connect(DATABASE) as db:
+                async with db.execute("SELECT telegram_id FROM users") as cursor:
+                    users = await cursor.fetchall()
+                    for user in users:
+                        try:
+                            await context.bot.send_message(chat_id=user[0], text=broadcast_text)
+                        except Exception as e:
+                            logger.error(f"Error sending broadcast to user {user[0]}: {e}")
+            await update.message.reply_text("✅ تم بث الرسالة بنجاح!")
+        except Exception as e:
+            logger.error(f"Error in broadcast: {e}")
+            await update.message.reply_text("❌ حدث خطأ أثناء البث. الرجاء المحاولة مرة أخرى.")
+        context.user_data['awaiting_broadcast'] = False
+
+async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("📝 الرجاء إرسال تعليقك:")
+    return FEEDBACK
+
+async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    feedback_text = update.message.text.strip()
+    if not feedback_text:
+        await update.message.reply_text("❌ الرجاء إدخال تعليق صحيح.")
+        return FEEDBACK
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute(
+                "INSERT INTO feedback (user_id, message) VALUES (?, ?)",
+                (update.message.from_user.id, feedback_text)
+            )
+            await db.commit()
+
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"📝 تعليق جديد من المستخدم {update.message.from_user.id}:\n{feedback_text}"
+        )
+        
+        await update.message.reply_text("✅ تم استلام تعليقك. شكراً لك!")
+        return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error handling feedback: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء إرسال التعليق. الرجاء المحاولة مرة أخرى.")
+        return FEEDBACK
+
+async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("🚨 الرجاء إرسال تقريرك:")
+    return REPORT
+
+async def handle_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    report_text = update.message.text.strip()
+    if not report_text:
+        await update.message.reply_text("❌ الرجاء إدخال تقرير صحيح.")
+        return REPORT
+
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute(
+                "INSERT INTO reports (user_id, message) VALUES (?, ?)",
+                (update.message.from_user.id, report_text)
+            )
+            await db.commit()
+
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"🚨 تقرير جديد من المستخدم {update.message.from_user.id}:\n{report_text}"
+        )
+        
+        await update.message.reply_text("✅ تم استلام تقريرك. شكراً لك!")
+        return ConversationHandler.END
+    except Exception as e:
+        logger.error(f"Error handling report: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء إرسال التقرير. الرجاء المحاولة مرة أخرى.")
+        return REPORT
+
+async def admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.message.from_user.id
+    if user_id != ADMIN_ID:
+        await update.message.reply_text("❌ ليس لديك صلاحية الوصول إلى هذه الميزة.")
+        return
+
+    try:
+        args = update.message.text.split(maxsplit=2)
+        if len(args) < 3:
+            await update.message.reply_text("❌ الرجاء استخدام الصيغة الصحيحة: /reply <user_id> <message>")
+            return
+
+        target_user_id = int(args[1])
+        message = args[2]
+
+        await context.bot.send_message(chat_id=target_user_id, text=f"📨 رد من الإدارة:\n{message}")
+        await update.message.reply_text(f"✅ تم إرسال الرد إلى المستخدم {target_user_id}.")
+    except Exception as e:
+        logger.error(f"Error in admin_reply: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء إرسال الرد. الرجاء المحاولة مرة أخرى.")
 
 async def import_users(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.message.from_user.id != ADMIN_ID:
@@ -196,14 +695,12 @@ async def extract_group_members(update: Update, context: ContextTypes.DEFAULT_TY
                     continue
                     
                 try:
-                    # Check if member already exists
                     cursor = await db.execute(
                         "SELECT 1 FROM group_members WHERE user_id = ? AND group_id = ?",
                         (member.user.id, chat.id)
                     )
                     exists = await cursor.fetchone()
                     
-                    # Update or insert group membership
                     await db.execute(
                         """INSERT OR REPLACE INTO group_members 
                         (user_id, group_id, group_title, last_seen)
@@ -211,7 +708,6 @@ async def extract_group_members(update: Update, context: ContextTypes.DEFAULT_TY
                         (member.user.id, chat.id, chat.title)
                     )
                     
-                    # Add basic user info if not exists
                     result = await db.execute(
                         """INSERT OR IGNORE INTO users 
                         (id, username, name, telegram_id)
@@ -240,7 +736,6 @@ async def extract_group_members(update: Update, context: ContextTypes.DEFAULT_TY
             f"تمت إضافة {new_members} عضو جديد إلى قاعدة البيانات"
         )
         
-        # Offer export option
         keyboard = [[InlineKeyboardButton("📤 تصدير بيانات الأعضاء", callback_data=f"export_group_{chat.id}")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         await update.message.reply_text("يمكنك تصدير بيانات الأعضاء الآن:", reply_markup=reply_markup)
@@ -263,7 +758,6 @@ async def export_group_members(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text("⏳ جاري تجهيز البيانات للتصدير...")
         
         async with aiosqlite.connect(DATABASE) as db:
-            # Get group info
             cursor = await db.execute(
                 "SELECT group_title FROM group_members WHERE group_id = ? LIMIT 1",
                 (group_id,)
@@ -271,7 +765,6 @@ async def export_group_members(update: Update, context: ContextTypes.DEFAULT_TYP
             group = await cursor.fetchone()
             group_title = group[0] if group else f"group_{group_id}"
             
-            # Get all members
             cursor = await db.execute(
                 """SELECT u.id, u.username, u.name, u.age, u.bio, u.type, 
                    u.location, u.country, u.city, u.telegram_id
@@ -286,17 +779,14 @@ async def export_group_members(update: Update, context: ContextTypes.DEFAULT_TYP
                 await query.edit_message_text("❌ لا يوجد أعضاء مسجلين لهذه المجموعة.")
                 return
             
-            # Create DataFrame
             df = pd.DataFrame(members, columns=[
                 'id', 'username', 'name', 'age', 'bio', 'type',
                 'location', 'country', 'city', 'telegram_id'
             ])
             
-            # Save to Excel
             filename = f"members_{group_title}_{datetime.now().strftime('%Y%m%d')}.xlsx"
             df.to_excel(filename, index=False)
             
-            # Send the file
             with open(filename, 'rb') as f:
                 await context.bot.send_document(
                     chat_id=ADMIN_ID,
@@ -310,8 +800,12 @@ async def export_group_members(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.error(f"Error exporting group members: {e}")
         await query.edit_message_text("❌ حدث خطأ أثناء تصدير البيانات.")
 
+async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    await start(update, context)
+
 async def set_bot_commands(application):
-    # User commands
     commands = [
         ("start", "بدء التسجيل"),
         ("search", "البحث عن مستخدمين قريبين"),
@@ -320,7 +814,6 @@ async def set_bot_commands(application):
     ]
     await application.bot.set_my_commands(commands)
 
-    # Admin commands
     admin_commands = [
         ("admin", "لوحة التحكم"),
         ("export", "تصدير بيانات المستخدمين"),
