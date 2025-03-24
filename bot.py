@@ -42,10 +42,84 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgr
 DATABASE = os.getenv("DATABASE", "users.db")
 ADMIN_ID = 1796978458
 
-# [Previous constants and database initialization remain the same...]
+# List of countries and cities
+COUNTRIES = {
+    "السودان": [
+        "الخرطوم", "أم درمان", "بحري", "بورتسودان", "كسلا", "القضارف", "ود مدني", 
+        "الأبيض", "نيالا", "الفاشر", "دنقلا", "عطبرة", "كوستي", "سنار", "الضعين",
+        "الدمازين", "شندي", "كريمة", "طوكر", "حلفا الجديدة", "وادي حلفا", "أم روابة",
+        "أبو جبيهة", "بابنوسة", "الجنينة", "جزيرة توتي", "الحصاحيصا", "رفاعة", "سنجة",
+        "الرنك", "حلفا", "الحديبة", "تندلتي", "الدلنج", "كادوقلي", "بنتيو", "الرهد",
+        "نوري", "أرقين", "خشم القربة", "النهود", "مروي", "سواكن", "حلايب", "أبورماد",
+        "عبري", "كتم", "الضعين", "المجلد", "كرنوي", "زالنجي"
+    ],
+    "مصر": ["القاهرة", "الإسكندرية", "الجيزة", "شرم الشيخ"],
+    "السعودية": ["الرياض", "جدة", "مكة", "المدينة المنورة"],
+    "ليبيا": ["طرابلس", "بنغازي", "مصراتة", "سبها"],
+    "الإمارات": ["دبي", "أبوظبي", "الشارقة", "عجمان"]
+}
+
+# Conversation states
+USERNAME, NAME, AGE, BIO, TYPE, COUNTRY, CITY, LOCATION, PHOTO = range(9)
+FEEDBACK, REPORT = range(2)
+
+async def init_db():
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY,
+                    username TEXT UNIQUE,
+                    name TEXT,
+                    age INTEGER,
+                    bio TEXT,
+                    type TEXT,
+                    location TEXT,
+                    photo TEXT,
+                    country TEXT,
+                    city TEXT,
+                    telegram_id INTEGER UNIQUE,
+                    banned INTEGER DEFAULT 0,
+                    frozen INTEGER DEFAULT 0,
+                    admin INTEGER DEFAULT 0,
+                    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS group_members (
+                    user_id INTEGER,
+                    group_id INTEGER,
+                    group_title TEXT,
+                    first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, group_id)
+                )"""
+            )
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    message TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    message TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            await db.commit()
+            logger.info("Database initialized successfully.")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+
+# [All your existing functions (start, registration handlers, etc.) remain unchanged...]
 
 async def import_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Enhanced user import from Excel files"""
+    """Enhanced user import from Excel files with detailed reporting"""
     if update.message.from_user.id != ADMIN_ID:
         await update.message.reply_text("❌ Admin only command")
         return
@@ -189,18 +263,100 @@ async def export_verification(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.error(f"Export failed: {str(e)}")
         await query.edit_message_text("❌ Failed to export database")
 
-# [Previous functions remain unchanged...]
+async def export_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Export all users to Excel"""
+    if update.message.from_user.id != ADMIN_ID:
+        await update.message.reply_text("❌ Admin only command")
+        return
+
+    try:
+        await update.message.reply_text("⏳ Preparing export...")
+        
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users")
+            users = await cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            
+            output = BytesIO()
+            df = pd.DataFrame(users, columns=columns)
+            df.to_excel(output, index=False)
+            output.seek(0)
+            
+            await context.bot.send_document(
+                chat_id=ADMIN_ID,
+                document=output,
+                filename=f"users_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                caption="📊 Users database export"
+            )
+            
+        await update.message.reply_text("✅ Export completed successfully")
+    except Exception as e:
+        logger.error(f"Export failed: {str(e)}")
+        await update.message.reply_text("❌ Failed to export user data")
 
 async def main():
     application = ApplicationBuilder().token(BOT_TOKEN).get_updates_pool_timeout(30).build()
 
-    # [Previous handlers setup...]
+    # Registration handler
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            USERNAME: [
+                CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)
+            ],
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
+            AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
+            BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
+            TYPE: [CallbackQueryHandler(set_type)],
+            COUNTRY: [CallbackQueryHandler(set_country)],
+            CITY: [CallbackQueryHandler(set_city)],
+            LOCATION: [MessageHandler(filters.LOCATION, set_location)],
+            PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
+        },
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+    )
 
-    # Add new handlers
-    application.add_handler(CommandHandler('import', import_users))
-    application.add_handler(CallbackQueryHandler(export_verification, pattern="^export_verify$"))
+    # Feedback and report handlers
+    feedback_handler = ConversationHandler(
+        entry_points=[CommandHandler('feedback', feedback)],
+        states={FEEDBACK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_feedback)]},
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+    )
+    
+    report_handler = ConversationHandler(
+        entry_points=[CommandHandler('report', report_user)],
+        states={REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_report)]},
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+    )
 
-    # [Rest of the main function remains the same...]
+    # Add all handlers
+    handlers = [
+        conv_handler,
+        feedback_handler,
+        report_handler,
+        CommandHandler('search', show_nearby_profiles),
+        CommandHandler('admin', admin_panel),
+        CommandHandler('export', export_users),
+        CommandHandler('broadcast', broadcast),
+        CommandHandler('import', import_users),
+        CommandHandler('extract', extract_group_members),
+        CommandHandler('reply', admin_reply),
+        CallbackQueryHandler(admin_profile_actions, pattern="^admin_profile_"),
+        CallbackQueryHandler(ban_user, pattern="^ban_"),
+        CallbackQueryHandler(freeze_user, pattern="^freeze_"),
+        CallbackQueryHandler(promote_user, pattern="^promote_"),
+        CallbackQueryHandler(export_verification, pattern="^export_verify$"),
+        CallbackQueryHandler(main_menu, pattern="^main_menu$"),
+        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_broadcast)
+    ]
+    
+    for handler in handlers:
+        application.add_handler(handler)
+
+    # Set bot commands
+    await set_bot_commands(application)
+    await application.run_polling()
 
 if __name__ == '__main__':
     asyncio.run(init_db())
