@@ -4,3 +4,4 @@ geopy
 nest_asyncio
 pandas==2.1.4
 openpyxl==3.1.2
+filelock
