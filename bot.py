@@ -7,9 +7,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
-    InputMediaPhoto,
-    Bot,
-    ChatMember
+    Bot
 )
 from telegram.ext import (
     ApplicationBuilder,
@@ -26,7 +24,6 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 import re
-import sys
 
 # Apply nest_asyncio for Jupyter/Notebook environments
 nest_asyncio.apply()
@@ -39,9 +36,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # REPLACE WITH YOUR ACTUAL TOKEN
+BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")  # Replace with your actual token
 DATABASE = os.getenv("DATABASE", "users.db")
-ADMIN_ID = 1796978458  # REPLACE WITH YOUR TELEGRAM USER ID
+ADMIN_ID = 123456789  # Replace with your Telegram user ID
 BACKUP_DIR = "backups"
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
@@ -184,14 +181,37 @@ async def show_terms(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("✅ أوافق", callback_data="agree_terms")],
         [InlineKeyboardButton("❌ لا أوافق", callback_data="decline_terms")]
     ]
-    await update.message.reply_text(
-        terms, 
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    
+    if update.callback_query:
+        await update.callback_query.answer()
+        await update.callback_query.edit_message_text(
+            terms, 
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    else:
+        await update.message.reply_text(
+            terms, 
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
     return USERNAME
+
+async def handle_terms_acceptance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle terms acceptance"""
+    query = update.callback_query
+    await query.answer()
+    
+    if query.data == "agree_terms":
+        await query.edit_message_text("الآن، أرسل اسم المستخدم الخاص بك:")
+        return USERNAME
+    else:
+        await query.edit_message_text("يجب الموافقة على الشروط لاستخدام البوت.")
+        return ConversationHandler.END
 
 async def set_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Set username during registration"""
+    if update.callback_query:
+        return USERNAME
+    
     username = update.message.text.strip()
     
     if not re.match(r'^[a-zA-Z0-9_]{5,32}$', username):
@@ -667,8 +687,9 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Return to admin panel"""
     query = update.callback_query
-    await query.answer()
-    await admin_panel(update, context)
+    if query:
+        await query.answer()
+        await admin_panel(update, context)
     return ConversationHandler.END
 
 async def log_admin_action(admin_id: int, action: str, target_id: int = None, details: str = None):
@@ -804,24 +825,40 @@ async def import_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     try:
+        # Download the file
         file = await context.bot.get_file(update.message.document.file_id)
-        await file.download_to_drive("import_data.xlsx")
+        file_path = f"import_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        await file.download_to_drive(file_path)
         
-        df = pd.read_excel("import_data.xlsx")
+        # Read Excel file
+        df = pd.read_excel(file_path)
         
+        # Ensure required columns exist
+        required_columns = ['username', 'name', 'age', 'bio', 'type', 
+                          'location', 'photo', 'country', 'city', 'telegram_id',
+                          'banned', 'frozen', 'admin']
+        
+        if not all(col in df.columns for col in required_columns):
+            await update.message.reply_text("❌ ملف Excel لا يحتوي على الأعمدة المطلوبة.")
+            return
+        
+        # Process each row
         async with aiosqlite.connect(DATABASE) as db:
             for _, row in df.iterrows():
+                # Convert NaN values to None
+                row = row.where(pd.notnull(row), None)
+                
                 await db.execute(
                     """INSERT OR REPLACE INTO users (
                         username, name, age, bio, type,
                         location, photo, country, city, telegram_id,
-                        banned, frozen, admin
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                        banned, frozen, admin, joined_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE((SELECT joined_at FROM users WHERE telegram_id = ?), datetime('now')))""",
                     (
                         row['username'], row['name'], row['age'], row['bio'],
                         row['type'], row['location'], row['photo'], row['country'],
-                        row['city'], row['telegram_id'], row['banned'],
-                        row['frozen'], row['admin']
+                        row['city'], row['telegram_id'], row['banned'] or 0,
+                        row['frozen'] or 0, row['admin'] or 0, row['telegram_id']
                     )
                 )
             await db.commit()
@@ -830,7 +867,7 @@ async def import_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Import failed: {e}")
-        await update.message.reply_text("❌ فشل استيراد البيانات")
+        await update.message.reply_text(f"❌ فشل استيراد البيانات: {str(e)}")
 
 async def extract_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Extract the entire database"""
@@ -853,6 +890,69 @@ async def extract_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Extract failed: {e}")
         await update.message.reply_text("❌ فشل استخراج قاعدة البيانات")
+
+async def extract_group_members(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Extract group members and format for database"""
+    if not await is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ ليس لديك صلاحية الدخول.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("الرجاء إدخال معرف المجموعة (مثال: /extract_group -100123456789)")
+        return
+    
+    group_id = context.args[0]
+    
+    try:
+        members = []
+        async for member in context.bot.get_chat_members(group_id):
+            user = member.user
+            
+            # Skip bots
+            if user.is_bot:
+                continue
+                
+            members.append({
+                'username': user.username or f"user_{user.id}",
+                'name': user.full_name,
+                'age': 25,  # Default age
+                'bio': "مستخدم مستورد من مجموعة",
+                'type': "male",  # Default type
+                'location': None,
+                'photo': None,
+                'country': "غير محدد",
+                'city': "غير محدد",
+                'telegram_id': user.id,
+                'banned': 0,
+                'frozen': 0,
+                'admin': 0
+            })
+        
+        if not members:
+            await update.message.reply_text("❌ لم يتم العثور على أعضاء في المجموعة")
+            return
+        
+        # Create DataFrame
+        df = pd.DataFrame(members)
+        
+        # Create Excel file in memory
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='Group Members', index=False)
+        
+        output.seek(0)
+        
+        # Send file
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=output,
+            filename=f"group_members_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            caption=f"📊 أعضاء المجموعة ({len(members)} مستخدم)"
+        )
+        
+    except Exception as e:
+        logger.error(f"Extract failed: {e}")
+        await update.message.reply_text(f"❌ فشل استخراج الأعضاء: {str(e)}")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Handle errors globally"""
@@ -887,7 +987,10 @@ async def main():
     registration = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
         states={
-            USERNAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)],
+            USERNAME: [
+                MessageHandler(filters.TEXT & ~filters.COMMAND, set_username),
+                CallbackQueryHandler(handle_terms_acceptance)
+            ],
             NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
             AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
             BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
@@ -898,7 +1001,6 @@ async def main():
             PHOTO: [MessageHandler(filters.PHOTO, set_photo)]
         },
         fallbacks=[CommandHandler('cancel', cancel_registration)],
-        per_message=True
     )
 
     # Feedback handler
@@ -945,6 +1047,7 @@ async def main():
     application.add_handler(CommandHandler('reply', reply_to_user))
     application.add_handler(CommandHandler('import', import_data))
     application.add_handler(CommandHandler('extract', extract_database))
+    application.add_handler(CommandHandler('extract_group', extract_group_members))
     
     # Error handler
     application.add_error_handler(error_handler)
