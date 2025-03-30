@@ -7,6 +7,7 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
+    InputMediaPhoto,
     Bot,
     ChatMember
 )
@@ -57,11 +58,12 @@ COUNTRIES = {
     COUNTRY, CITY, LOCATION, PHOTO,
     FEEDBACK, REPORT,
     BROADCAST_MESSAGE,
-    BAN_USER, FREEZE_USER, PROMOTE_USER
-) = range(14)
+    BAN_USER, FREEZE_USER, PROMOTE_USER,
+    ADMIN_BACK
+) = range(16)
 
 async def init_db():
-    """Initialize database with proper error handling"""
+    """Initialize database with all tables"""
     try:
         async with aiosqlite.connect(DATABASE) as db:
             # Users table
@@ -188,8 +190,138 @@ async def show_terms(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return USERNAME
 
-async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Complete user registration"""
+async def set_username(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set username during registration"""
+    username = update.message.text.strip()
+    
+    if not re.match(r'^[a-zA-Z0-9_]{5,32}$', username):
+        await update.message.reply_text("اسم المستخدم غير صالح (5-32 حرف، أحرف وأرقام فقط)")
+        return USERNAME
+    
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute(
+                "SELECT 1 FROM users WHERE username = ?",
+                (username,)
+            )
+            if await cursor.fetchone():
+                await update.message.reply_text("اسم المستخدم موجود مسبقًا، اختر اسمًا آخر")
+                return USERNAME
+    except Exception as e:
+        logger.error(f"Username check failed: {e}")
+        await update.message.reply_text("حدث خطأ، حاول لاحقًا")
+        return ConversationHandler.END
+    
+    context.user_data['username'] = username
+    await update.message.reply_text("الآن، أرسل اسمك الكامل:")
+    return NAME
+
+async def set_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set full name during registration"""
+    name = update.message.text.strip()
+    if len(name) < 2 or len(name) > 50:
+        await update.message.reply_text("الاسم يجب أن يكون بين 2-50 حرفًا")
+        return NAME
+    
+    context.user_data['name'] = name
+    await update.message.reply_text("أرسل عمرك:")
+    return AGE
+
+async def set_age(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set age during registration"""
+    try:
+        age = int(update.message.text)
+        if age < 18 or age > 100:
+            await update.message.reply_text("العمر يجب أن يكون بين 18-100")
+            return AGE
+    except ValueError:
+        await update.message.reply_text("الرجاء إدخال رقم صحيح")
+        return AGE
+    
+    context.user_data['age'] = age
+    await update.message.reply_text("أرسل نبذة عنك (10-500 حرف):")
+    return BIO
+
+async def set_bio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set bio during registration"""
+    bio = update.message.text.strip()
+    if len(bio) < 10 or len(bio) > 500:
+        await update.message.reply_text("النبذة يجب أن تكون بين 10-500 حرف")
+        return BIO
+    
+    context.user_data['bio'] = bio
+    
+    keyboard = [
+        [InlineKeyboardButton("👨 رجل", callback_data="male")],
+        [InlineKeyboardButton("👩 امرأة", callback_data="female")]
+    ]
+    await update.message.reply_text(
+        "اختر جنسك:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return TYPE
+
+async def set_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set gender type during registration"""
+    query = update.callback_query
+    await query.answer()
+    
+    context.user_data['type'] = query.data
+    
+    keyboard = [
+        [InlineKeyboardButton(country, callback_data=f"country_{country}")]
+        for country in COUNTRIES.keys()
+    ]
+    await query.edit_message_text(
+        "اختر بلدك:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return COUNTRY
+
+async def set_country(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set country during registration"""
+    query = update.callback_query
+    await query.answer()
+    
+    country = query.data.replace("country_", "")
+    context.user_data['country'] = country
+    
+    cities = COUNTRIES.get(country, [])
+    keyboard = [
+        [InlineKeyboardButton(city, callback_data=f"city_{city}")]
+        for city in cities
+    ]
+    await query.edit_message_text(
+        "اختر مدينتك:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    return CITY
+
+async def set_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set city during registration"""
+    query = update.callback_query
+    await query.answer()
+    
+    city = query.data.replace("city_", "")
+    context.user_data['city'] = city
+    
+    await query.edit_message_text("أرسل موقعك الجغرافي:")
+    return LOCATION
+
+async def set_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set location during registration"""
+    location = update.message.location
+    context.user_data['location'] = f"{location.latitude},{location.longitude}"
+    
+    await update.message.reply_text("أرسل صورتك:")
+    return PHOTO
+
+async def set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set profile photo during registration"""
+    photo = update.message.photo[-1].file_id
+    context.user_data['photo'] = photo
+    
+    # Complete registration
     user = update.effective_user
     user_data = context.user_data
     
@@ -215,7 +347,7 @@ async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await db.commit()
         
-        await update.message.reply_text("🎉 تم التسجيل بنجاح! استخدم /search للبحث.")
+        await update.message.reply_text("🎉 تم التسجيل بنجاح! استخدم /search للبحث عن أشخاص قريبين.")
         
         # Notify admin
         await context.bot.send_message(
@@ -228,8 +360,184 @@ async def register_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END
 
+async def cancel_registration(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel registration process"""
+    await update.message.reply_text("تم إلغاء التسجيل.")
+    return ConversationHandler.END
+
+async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show nearby profiles to user"""
+    user = update.effective_user
+    
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            # Check if user exists and is not banned/frozen
+            cursor = await db.execute(
+                "SELECT location, banned, frozen FROM users WHERE telegram_id = ?",
+                (user.id,)
+            )
+            user_data = await cursor.fetchone()
+            
+            if not user_data:
+                await update.message.reply_text("❌ يجب التسجيل أولاً باستخدام /start")
+                return
+            if user_data[1]:  # banned
+                await update.message.reply_text("❌ حسابك محظور.")
+                return
+            if user_data[2]:  # frozen
+                await update.message.reply_text("❄️ حسابك مجمد مؤقتًا.")
+                return
+            if not user_data[0]:  # no location
+                await update.message.reply_text("❌ يجب مشاركة موقعك الجغرافي أولاً")
+                return
+            
+            lat, lon = map(float, user_data[0].split(','))
+            
+            # Get nearby users (within 50km)
+            cursor = await db.execute(
+                "SELECT * FROM users WHERE telegram_id != ? AND banned = 0 AND frozen = 0",
+                (user.id,)
+            )
+            users = await cursor.fetchall()
+            
+            nearby_users = []
+            for u in users:
+                if not u[6]:  # no location
+                    continue
+                
+                u_lat, u_lon = map(float, u[6].split(','))
+                distance = geodesic((lat, lon), (u_lat, u_lon)).km
+                
+                if distance <= 50:
+                    nearby_users.append((u, distance))
+            
+            if not nearby_users:
+                await update.message.reply_text("لا يوجد أشخاص قريبين منك الآن.")
+                return
+            
+            # Show top 10 nearest
+            nearby_users.sort(key=lambda x: x[1])
+            for u, distance in nearby_users[:10]:
+                caption = (
+                    f"👤 {u[2]}, {u[3]} سنة\n"
+                    f"📍 {u[8]}, {u[9]} (على بعد {distance:.1f} كم)\n"
+                    f"📝 {u[4]}\n\n"
+                    f"✉️ @{u[1]}"
+                )
+                
+                try:
+                    await context.bot.send_photo(
+                        chat_id=user.id,
+                        photo=u[7],
+                        caption=caption,
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("🚀 إرسال رسالة", url=f"https://t.me/{u[1]}")]
+                        ])
+                    )
+                except telegram.error.BadRequest:
+                    await context.bot.send_message(
+                        chat_id=user.id,
+                        text=caption,
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("🚀 إرسال رسالة", url=f"https://t.me/{u[1]}")]
+                        ])
+                    )
+                
+    except Exception as e:
+        logger.error(f"Error showing nearby profiles: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء البحث.")
+
+async def feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start feedback conversation"""
+    await update.message.reply_text(
+        "📝 أرسل ملاحظاتك أو اقتراحاتك:\n"
+        "يمكنك إرسال /cancel للإلغاء"
+    )
+    return FEEDBACK
+
+async def handle_feedback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle user feedback"""
+    feedback_text = update.message.text
+    user = update.effective_user
+    
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            await db.execute(
+                "INSERT INTO feedback (user_id, message) VALUES (?, ?)",
+                (user.id, feedback_text)
+            )
+            await db.commit()
+        
+        await update.message.reply_text("شكرًا لك على ملاحظاتك!")
+        
+        # Notify admin
+        username = f"@{user.username}" if user.username else f"user_{user.id}"
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"📝 ملاحظات جديدة من {username}:\n\n{feedback_text}"
+        )
+    except Exception as e:
+        logger.error(f"Error saving feedback: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء حفظ الملاحظات.")
+    
+    return ConversationHandler.END
+
+async def report_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start report conversation"""
+    await update.message.reply_text(
+        "⚠️ أرسل تقريرك عن المستخدم (مع ذكر @username):\n"
+        "يمكنك إرسال /cancel للإلغاء"
+    )
+    return REPORT
+
+async def handle_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle user report"""
+    report_text = update.message.text
+    user = update.effective_user
+    
+    # Extract username
+    username_match = re.search(r'@([a-zA-Z0-9_]{5,32})', report_text)
+    if not username_match:
+        await update.message.reply_text("❌ يجب ذكر اسم المستخدم (مثال: @username)")
+        return REPORT
+    
+    username = username_match.group(1)
+    
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            # Get reported user ID
+            cursor = await db.execute(
+                "SELECT telegram_id FROM users WHERE username = ?",
+                (username,)
+            )
+            reported_user = await cursor.fetchone()
+            
+            if not reported_user:
+                await update.message.reply_text("❌ لم يتم العثور على المستخدم")
+                return REPORT
+            
+            await db.execute(
+                "INSERT INTO reports (user_id, reported_user_id, message) VALUES (?, ?, ?)",
+                (user.id, reported_user[0], report_text)
+            )
+            await db.commit()
+        
+        await update.message.reply_text("شكرًا لك على التقرير، سنقوم بمراجعته.")
+        
+        # Notify admin
+        reporter = f"@{user.username}" if user.username else f"user_{user.id}"
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"⚠️ تقرير جديد من {reporter}:\nالمبلغ عنه: @{username}\nالتقرير:\n{report_text}"
+        )
+    except Exception as e:
+        logger.error(f"Error saving report: {e}")
+        await update.message.reply_text("❌ حدث خطأ أثناء حفظ التقرير.")
+    
+    return ConversationHandler.END
+
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Display admin panel"""
+    """Show admin panel"""
     user = update.effective_user
     if not await is_admin(user.id):
         await update.message.reply_text("❌ ليس لديك صلاحية الدخول.")
@@ -247,11 +555,14 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-async def handle_admin_stats(query):
+async def handle_admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show admin statistics"""
+    query = update.callback_query
+    await query.answer()
+    
     try:
         async with aiosqlite.connect(DATABASE) as db:
-            # Get user counts
+            # Get counts
             cursor = await db.execute("SELECT COUNT(*) FROM users")
             total_users = (await cursor.fetchone())[0]
             
@@ -261,11 +572,15 @@ async def handle_admin_stats(query):
             cursor = await db.execute("SELECT COUNT(*) FROM users WHERE frozen = 1")
             frozen_users = (await cursor.fetchone())[0]
             
+            cursor = await db.execute("SELECT COUNT(*) FROM reports WHERE timestamp > datetime('now', '-7 days')")
+            recent_reports = (await cursor.fetchone())[0]
+            
             stats = (
                 f"📊 الإحصائيات:\n\n"
                 f"👥 إجمالي المستخدمين: {total_users}\n"
                 f"⛔ محظورين: {banned_users}\n"
                 f"❄️ مجمدين: {frozen_users}\n"
+                f"⚠️ تقارير هذا الأسبوع: {recent_reports}"
             )
             
             await query.edit_message_text(
@@ -278,8 +593,11 @@ async def handle_admin_stats(query):
         logger.error(f"Failed to get stats: {e}")
         await query.edit_message_text("❌ فشل جلب الإحصائيات.")
 
-async def handle_admin_users(query):
-    """User management menu"""
+async def handle_admin_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show user management options"""
+    query = update.callback_query
+    await query.answer()
+    
     keyboard = [
         [InlineKeyboardButton("⛔ حظر مستخدم", callback_data="admin_ban")],
         [InlineKeyboardButton("❄️ تجميد مستخدم", callback_data="admin_freeze")],
@@ -292,11 +610,14 @@ async def handle_admin_users(query):
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-async def start_broadcast(query):
-    """Initiate broadcast message"""
+async def start_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start broadcast message process"""
+    query = update.callback_query
+    await query.answer()
+    
     await query.edit_message_text(
         "📢 أرسل الرسالة للبث:\n"
-        "أو /cancel للإلغاء",
+        "يمكنك إرسال /cancel للإلغاء",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
         ])
@@ -409,6 +730,24 @@ async def main():
         per_message=True
     )
 
+    # Feedback handler
+    feedback_handler = ConversationHandler(
+        entry_points=[CommandHandler('feedback', feedback)],
+        states={
+            FEEDBACK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_feedback)]
+        },
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)]
+    )
+
+    # Report handler
+    report_handler = ConversationHandler(
+        entry_points=[CommandHandler('report', report_user)],
+        states={
+            REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_report)]
+        },
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)]
+    )
+
     # Admin broadcast handler
     broadcast_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(start_broadcast, pattern="^admin_broadcast$")],
@@ -420,10 +759,10 @@ async def main():
 
     # Add all handlers
     application.add_handler(registration)
-    application.add_handler(CommandHandler('admin', admin_panel))
     application.add_handler(CommandHandler('search', show_nearby_profiles))
-    application.add_handler(CommandHandler('feedback', feedback))
-    application.add_handler(CommandHandler('report', report_user))
+    application.add_handler(feedback_handler)
+    application.add_handler(report_handler)
+    application.add_handler(CommandHandler('admin', admin_panel))
     application.add_handler(CallbackQueryHandler(handle_admin_stats, pattern="^admin_stats$"))
     application.add_handler(CallbackQueryHandler(handle_admin_users, pattern="^admin_users$"))
     application.add_handler(broadcast_handler)
