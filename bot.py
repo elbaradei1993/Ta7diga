@@ -27,6 +27,8 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 import re
+import filelock
+import sys
 
 # Apply nest_asyncio for Jupyter/Notebook environments
 nest_asyncio.apply()
@@ -761,60 +763,93 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def main():
-    # Initialize database
-    await init_db()
-    
-    application = ApplicationBuilder().token(BOT_TOKEN).build()
+    # Ensure single instance running
+    try:
+        lock = filelock.FileLock('/tmp/tahdeeqa_bot.lock', timeout=1)
+        with lock:
+            # Initialize database
+            await init_db()
+            
+            # Build application with stable connection settings
+            application = ApplicationBuilder() \
+                .token(BOT_TOKEN) \
+                .get_updates_http_version("1.1") \
+                .http_version("1.1") \
+                .build()
 
-    # Registration handler
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            USERNAME: [
-                CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"),
-                CallbackQueryHandler(decline_terms, pattern="^decline_terms$"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)
-            ],
-            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
-            AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
-            BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-            TYPE: [CallbackQueryHandler(set_type)],
-            COUNTRY: [CallbackQueryHandler(set_country)],
-            CITY: [CallbackQueryHandler(set_city)],
-            LOCATION: [MessageHandler(filters.LOCATION, set_location)],
-            PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
-        },
-        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-        per_message=True
-    )
+            # Registration handler
+            conv_handler = ConversationHandler(
+                entry_points=[CommandHandler('start', start)],
+                states={
+                    USERNAME: [
+                        CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"),
+                        CallbackQueryHandler(decline_terms, pattern="^decline_terms$"),
+                        MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)
+                    ],
+                    NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
+                    AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
+                    BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
+                    TYPE: [CallbackQueryHandler(set_type)],
+                    COUNTRY: [CallbackQueryHandler(set_country)],
+                    CITY: [CallbackQueryHandler(set_city)],
+                    LOCATION: [MessageHandler(filters.LOCATION, set_location)],
+                    PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
+                },
+                fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+                per_message=True
+            )
 
-    # Feedback and report handlers
-    feedback_handler = ConversationHandler(
-        entry_points=[CommandHandler('feedback', feedback)],
-        states={FEEDBACK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_feedback)]},
-        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-        per_message=True
-    )
-    
-    report_handler = ConversationHandler(
-        entry_points=[CommandHandler('report', report_user)],
-        states={REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_report)]},
-        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-        per_message=True
-    )
+            # Feedback and report handlers
+            feedback_handler = ConversationHandler(
+                entry_points=[CommandHandler('feedback', feedback)],
+                states={FEEDBACK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_feedback)]},
+                fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+                per_message=True
+            )
+            
+            report_handler = ConversationHandler(
+                entry_points=[CommandHandler('report', report_user)],
+                states={REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_report)]},
+                fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+                per_message=True
+            )
 
-    # Add all handlers
-    application.add_handler(conv_handler)
-    application.add_handler(feedback_handler)
-    application.add_handler(report_handler)
-    application.add_handler(CommandHandler('search', show_nearby_profiles))
-    application.add_handler(CommandHandler('admin', admin_panel))
-    
-    # Add error handler
-    application.add_error_handler(error_handler)
+            # Add all handlers
+            application.add_handler(conv_handler)
+            application.add_handler(feedback_handler)
+            application.add_handler(report_handler)
+            application.add_handler(CommandHandler('search', show_nearby_profiles))
+            application.add_handler(CommandHandler('admin', admin_panel))
+            
+            # Add error handler
+            application.add_error_handler(error_handler)
 
-    # Start the bot
-    await application.run_polling()
+            try:
+                await application.initialize()
+                await application.start()
+                await application.updater.start_polling()
+                logger.info("Bot started successfully")
+                
+                # Keep running
+                while True:
+                    await asyncio.sleep(3600)
+                    
+            except asyncio.CancelledError:
+                logger.info("Bot shutting down...")
+            except Exception as e:
+                logger.error(f"Bot crashed: {e}")
+            finally:
+                await application.stop()
+                logger.info("Bot stopped")
+                
+    except filelock.Timeout:
+        logger.error("Another bot instance is already running")
+        sys.exit(1)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user")
+    except Exception as e:
+        logger.error(f"Fatal error: {e}")
