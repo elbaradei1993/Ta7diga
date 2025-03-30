@@ -27,7 +27,6 @@ import pandas as pd
 from datetime import datetime
 from io import BytesIO
 import re
-import filelock
 import sys
 
 # Apply nest_asyncio for Jupyter/Notebook environments
@@ -550,7 +549,6 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
             cursor = await db.execute(
                 "SELECT 1 FROM users WHERE telegram_id = ?",
                 (user.id,)
-            )
             if not await cursor.fetchone():
                 await update.message.reply_text(
                     "❌ لم تقم بتسجيل بياناتك بعد. الرجاء استخدام /start لتسجيل بياناتك أولاً."
@@ -561,7 +559,6 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
             cursor = await db.execute(
                 "SELECT banned, frozen FROM users WHERE telegram_id = ?",
                 (user.id,)
-            )
             user_status = await cursor.fetchone()
             
             if user_status and (user_status[0] or user_status[1]):
@@ -574,7 +571,6 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
             cursor = await db.execute(
                 "SELECT location FROM users WHERE telegram_id = ?",
                 (user.id,)
-            )
             user_location = await cursor.fetchone()
             
             if not user_location or not user_location[0]:
@@ -588,8 +584,7 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
             # Get all nearby users (within 50km)
             cursor = await db.execute(
                 "SELECT * FROM users WHERE telegram_id != ? AND banned = 0 AND frozen = 0",
-                (user.id,)
-            )
+                (user.id,))
             users = await cursor.fetchall()
             
             nearby_users = []
@@ -743,7 +738,7 @@ async def handle_report(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show admin panel with working buttons"""
     user = update.effective_user
-    if user.id != ADMIN_ID and not await is_admin(user.id):
+    if not await is_admin(user.id):
         await update.message.reply_text("❌ ليس لديك صلاحية الدخول إلى لوحة التحكم.")
         return
     
@@ -751,7 +746,6 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("📊 الإحصائيات", callback_data="admin_stats")],
         [InlineKeyboardButton("👤 إدارة المستخدمين", callback_data="admin_users")],
         [InlineKeyboardButton("📤 تصدير البيانات", callback_data="admin_export")],
-        [InlineKeyboardButton("📥 استيراد البيانات", callback_data="admin_import")],
         [InlineKeyboardButton("📢 بث رسالة", callback_data="admin_broadcast")],
         [InlineKeyboardButton("💾 إنشاء نسخة احتياطية", callback_data="admin_backup")]
     ]
@@ -762,89 +756,222 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup
     )
 
-async def main():
-    # Ensure single instance running
+async def handle_admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle admin panel callbacks"""
+    query = update.callback_query
+    await query.answer()
+    
+    user = query.from_user
+    if not await is_admin(user.id):
+        await query.edit_message_text("❌ ليس لديك صلاحية الوصول إلى هذه الأداة.")
+        return
+    
+    action = query.data
+    
+    if action == "admin_stats":
+        await show_admin_stats(query)
+    elif action == "admin_users":
+        await show_user_management(query)
+    elif action == "admin_export":
+        await export_data(query, context)
+    elif action == "admin_broadcast":
+        await start_broadcast(query)
+    elif action == "admin_backup":
+        await create_backup(query, context)
+    else:
+        await query.edit_message_text("❌ أمر غير معروف.")
+
+async def show_admin_stats(query):
+    """Show admin statistics"""
     try:
-        lock = filelock.FileLock('/tmp/tahdeeqa_bot.lock', timeout=1)
-        with lock:
-            # Initialize database
-            await init_db()
+        async with aiosqlite.connect(DATABASE) as db:
+            # Get total users
+            cursor = await db.execute("SELECT COUNT(*) FROM users")
+            total_users = (await cursor.fetchone())[0]
             
-            # Build application with stable connection settings
-            application = ApplicationBuilder() \
-                .token(BOT_TOKEN) \
-                .get_updates_http_version("1.1") \
-                .http_version("1.1") \
-                .build()
-
-            # Registration handler
-            conv_handler = ConversationHandler(
-                entry_points=[CommandHandler('start', start)],
-                states={
-                    USERNAME: [
-                        CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"),
-                        CallbackQueryHandler(decline_terms, pattern="^decline_terms$"),
-                        MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)
-                    ],
-                    NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
-                    AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
-                    BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
-                    TYPE: [CallbackQueryHandler(set_type)],
-                    COUNTRY: [CallbackQueryHandler(set_country)],
-                    CITY: [CallbackQueryHandler(set_city)],
-                    LOCATION: [MessageHandler(filters.LOCATION, set_location)],
-                    PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
-                },
-                fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-                per_message=True
-            )
-
-            # Feedback and report handlers
-            feedback_handler = ConversationHandler(
-                entry_points=[CommandHandler('feedback', feedback)],
-                states={FEEDBACK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_feedback)]},
-                fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-                per_message=True
+            # Get active users (last 30 days)
+            cursor = await db.execute("""
+                SELECT COUNT(*) FROM users 
+                WHERE joined_at > datetime('now', '-30 days')
+            """)
+            active_users = (await cursor.fetchone())[0]
+            
+            # Get reports count
+            cursor = await db.execute("SELECT COUNT(*) FROM reports WHERE timestamp > datetime('now', '-7 days')")
+            recent_reports = (await cursor.fetchone())[0]
+            
+            stats_text = (
+                f"📊 إحصائيات النظام:\n\n"
+                f"👥 إجمالي المستخدمين: {total_users}\n"
+                f"🟢 مستخدمين نشطين (آخر 30 يوم): {active_users}\n"
+                f"⚠️ تقارير في الأسبوع الأخير: {recent_reports}\n"
             )
             
-            report_handler = ConversationHandler(
-                entry_points=[CommandHandler('report', report_user)],
-                states={REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_report)]},
-                fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-                per_message=True
+            await query.edit_message_text(
+                stats_text,
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
+                ])
             )
+    except Exception as e:
+        logger.error(f"Error showing admin stats: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء جلب الإحصائيات.")
 
-            # Add all handlers
-            application.add_handler(conv_handler)
-            application.add_handler(feedback_handler)
-            application.add_handler(report_handler)
-            application.add_handler(CommandHandler('search', show_nearby_profiles))
-            application.add_handler(CommandHandler('admin', admin_panel))
+async def show_user_management(query):
+    """Show user management options"""
+    keyboard = [
+        [InlineKeyboardButton("🔍 بحث عن مستخدم", callback_data="admin_search_user")],
+        [InlineKeyboardButton("⛔ حظر مستخدم", callback_data="admin_ban_user")],
+        [InlineKeyboardButton("❄️ تجميد مستخدم", callback_data="admin_freeze_user")],
+        [InlineKeyboardButton("✅ رفع مسؤول", callback_data="admin_promote_user")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
+    ]
+    
+    await query.edit_message_text(
+        "👤 إدارة المستخدمين:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def export_data(query, context):
+    """Export database data to Excel"""
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            # Get users data
+            cursor = await db.execute("SELECT * FROM users")
+            users = await cursor.fetchall()
             
-            # Add error handler
-            application.add_error_handler(error_handler)
+            # Create DataFrame
+            df = pd.DataFrame(users, columns=[
+                'id', 'username', 'name', 'age', 'bio', 'type', 
+                'location', 'photo', 'country', 'city', 'telegram_id',
+                'banned', 'frozen', 'admin', 'joined_at'
+            ])
+            
+            # Create Excel file in memory
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, sheet_name='Users', index=False)
+            
+            output.seek(0)
+            
+            # Send file
+            await context.bot.send_document(
+                chat_id=query.message.chat_id,
+                document=output,
+                filename=f"users_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                caption="📤 تصدير بيانات المستخدمين"
+            )
+            
+            await query.edit_message_text(
+                "✅ تم تصدير البيانات بنجاح.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
+                )
+            )
+    except Exception as e:
+        logger.error(f"Error exporting data: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء تصدير البيانات.")
 
-            try:
-                await application.initialize()
-                await application.start()
-                await application.updater.start_polling()
-                logger.info("Bot started successfully")
-                
-                # Keep running
-                while True:
-                    await asyncio.sleep(3600)
-                    
-            except asyncio.CancelledError:
-                logger.info("Bot shutting down...")
-            except Exception as e:
-                logger.error(f"Bot crashed: {e}")
-            finally:
-                await application.stop()
-                logger.info("Bot stopped")
-                
-    except filelock.Timeout:
-        logger.error("Another bot instance is already running")
-        sys.exit(1)
+async def create_backup(query, context):
+    """Create database backup"""
+    try:
+        backup_file = await backup_database()
+        if backup_file:
+            await context.bot.send_document(
+                chat_id=query.message.chat_id,
+                document=open(backup_file, 'rb'),
+                filename=os.path.basename(backup_file),
+                caption="💾 نسخة احتياطية من قاعدة البيانات"
+            )
+            
+            await query.edit_message_text(
+                "✅ تم إنشاء نسخة احتياطية بنجاح.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
+                ])
+            )
+        else:
+            await query.edit_message_text("❌ فشل في إنشاء النسخة الاحتياطية.")
+    except Exception as e:
+        logger.error(f"Error creating backup: {e}")
+        await query.edit_message_text("❌ حدث خطأ أثناء إنشاء النسخة الاحتياطية.")
+
+async def main():
+    # Initialize database
+    await init_db()
+    
+    # Build application with stable connection settings
+    application = ApplicationBuilder() \
+        .token(BOT_TOKEN) \
+        .get_updates_http_version("1.1") \
+        .http_version("1.1") \
+        .build()
+
+    # Registration handler
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            USERNAME: [
+                CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"),
+                CallbackQueryHandler(decline_terms, pattern="^decline_terms$"),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)
+            ],
+            NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_name)],
+            AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_age)],
+            BIO: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_bio)],
+            TYPE: [CallbackQueryHandler(set_type)],
+            COUNTRY: [CallbackQueryHandler(set_country)],
+            CITY: [CallbackQueryHandler(set_city)],
+            LOCATION: [MessageHandler(filters.LOCATION, set_location)],
+            PHOTO: [MessageHandler(filters.PHOTO, set_photo)],
+        },
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+        per_message=True
+    )
+
+    # Feedback and report handlers
+    feedback_handler = ConversationHandler(
+        entry_points=[CommandHandler('feedback', feedback)],
+        states={FEEDBACK: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_feedback)]},
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+        per_message=True
+    )
+    
+    report_handler = ConversationHandler(
+        entry_points=[CommandHandler('report', report_user)],
+        states={REPORT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_report)]},
+        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
+        per_message=True
+    )
+
+    # Add all handlers
+    application.add_handler(conv_handler)
+    application.add_handler(feedback_handler)
+    application.add_handler(report_handler)
+    application.add_handler(CommandHandler('search', show_nearby_profiles))
+    application.add_handler(CommandHandler('admin', admin_panel))
+    application.add_handler(CallbackQueryHandler(handle_admin_callback, pattern="^admin_"))
+    
+    # Add error handler
+    application.add_error_handler(error_handler)
+
+    try:
+        await application.initialize()
+        await application.start()
+        await application.updater.start_polling()
+        logger.info("Bot started successfully")
+        
+        # Keep running
+        while True:
+            await asyncio.sleep(3600)
+            
+    except asyncio.CancelledError:
+        logger.info("Bot shutting down...")
+    except Exception as e:
+        logger.error(f"Bot crashed: {e}")
+    finally:
+        await application.stop()
+        logger.info("Bot stopped")
 
 if __name__ == '__main__':
     try:
