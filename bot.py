@@ -549,6 +549,7 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
             cursor = await db.execute(
                 "SELECT 1 FROM users WHERE telegram_id = ?",
                 (user.id,)
+            )
             if not await cursor.fetchone():
                 await update.message.reply_text(
                     "❌ لم تقم بتسجيل بياناتك بعد. الرجاء استخدام /start لتسجيل بياناتك أولاً."
@@ -866,7 +867,7 @@ async def export_data(query, context):
                 "✅ تم تصدير البيانات بنجاح.",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔙 رجوع", callback_data="admin_back")]
-                )
+                ])
             )
     except Exception as e:
         logger.error(f"Error exporting data: {e}")
