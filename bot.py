@@ -36,9 +36,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN")  # Replace with your actual token
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # Replace with your actual token
 DATABASE = os.getenv("DATABASE", "users.db")
-ADMIN_ID = 123456789  # Replace with your Telegram user ID
+ADMIN_ID = 1796978458  # Replace with your Telegram user ID
 BACKUP_DIR = "backups"
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
