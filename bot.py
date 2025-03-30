@@ -683,6 +683,177 @@ async def log_admin_action(admin_id: int, action: str, target_id: int = None, de
     except Exception as e:
         logger.error(f"Failed to log admin action: {e}")
 
+async def export_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Export user data to Excel"""
+    if not await is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ ليس لديك صلاحية الدخول.")
+        return
+    
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT * FROM users")
+            users = await cursor.fetchall()
+            
+            # Create DataFrame
+            df = pd.DataFrame(users, columns=[
+                'id', 'username', 'name', 'age', 'bio', 'type', 
+                'location', 'photo', 'country', 'city', 'telegram_id',
+                'banned', 'frozen', 'admin', 'joined_at'
+            ])
+            
+            # Create Excel file in memory
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df.to_excel(writer, sheet_name='Users', index=False)
+            
+            output.seek(0)
+            
+            # Send file
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=output,
+                filename=f"users_export_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                caption="📤 تصدير بيانات المستخدمين"
+            )
+            
+    except Exception as e:
+        logger.error(f"Export failed: {e}")
+        await update.message.reply_text("❌ فشل تصدير البيانات")
+
+async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Broadcast message to all users"""
+    if not await is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ ليس لديك صلاحية الدخول.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("الاستخدام: /broadcast <الرسالة>")
+        return
+    
+    message = ' '.join(context.args)
+    
+    try:
+        async with aiosqlite.connect(DATABASE) as db:
+            cursor = await db.execute("SELECT telegram_id FROM users WHERE banned = 0")
+            users = await cursor.fetchall()
+        
+        success = 0
+        for user_id, in users:
+            try:
+                await context.bot.send_message(
+                    chat_id=user_id,
+                    text=f"📢 إشعار من الإدارة:\n\n{message}"
+                )
+                success += 1
+                await asyncio.sleep(0.1)  # Rate limiting
+            except Exception as e:
+                logger.error(f"Broadcast failed for {user_id}: {e}")
+        
+        await update.message.reply_text(f"✅ تم الإرسال لـ {success} مستخدم")
+        
+        # Log the broadcast
+        await log_admin_action(
+            update.effective_user.id,
+            "broadcast",
+            details=f"Sent to {success} users"
+        )
+    
+    except Exception as e:
+        logger.error(f"Broadcast failed: {e}")
+        await update.message.reply_text("❌ فشل البث")
+
+async def reply_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Reply to a specific user"""
+    if not await is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ ليس لديك صلاحية الدخول.")
+        return
+    
+    if len(context.args) < 2:
+        await update.message.reply_text("الاستخدام: /reply <user_id> <الرسالة>")
+        return
+    
+    user_id = context.args[0]
+    message = ' '.join(context.args[1:])
+    
+    try:
+        await context.bot.send_message(
+            chat_id=int(user_id),
+            text=f"📬 رد من الإدارة:\n\n{message}"
+        )
+        await update.message.reply_text("✅ تم إرسال الرد")
+        
+        # Log the action
+        await log_admin_action(
+            update.effective_user.id,
+            "reply",
+            target_id=int(user_id),
+            details=message
+        )
+    except Exception as e:
+        logger.error(f"Reply failed: {e}")
+        await update.message.reply_text("❌ فشل إرسال الرد")
+
+async def import_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Import user data from Excel"""
+    if not await is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ ليس لديك صلاحية الدخول.")
+        return
+    
+    if not update.message.document:
+        await update.message.reply_text("الرجاء إرفاق ملف Excel للاستيراد")
+        return
+    
+    try:
+        file = await context.bot.get_file(update.message.document.file_id)
+        await file.download_to_drive("import_data.xlsx")
+        
+        df = pd.read_excel("import_data.xlsx")
+        
+        async with aiosqlite.connect(DATABASE) as db:
+            for _, row in df.iterrows():
+                await db.execute(
+                    """INSERT OR REPLACE INTO users (
+                        username, name, age, bio, type,
+                        location, photo, country, city, telegram_id,
+                        banned, frozen, admin
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        row['username'], row['name'], row['age'], row['bio'],
+                        row['type'], row['location'], row['photo'], row['country'],
+                        row['city'], row['telegram_id'], row['banned'],
+                        row['frozen'], row['admin']
+                    )
+                )
+            await db.commit()
+        
+        await update.message.reply_text(f"✅ تم استيراد {len(df)} مستخدم بنجاح")
+        
+    except Exception as e:
+        logger.error(f"Import failed: {e}")
+        await update.message.reply_text("❌ فشل استيراد البيانات")
+
+async def extract_database(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Extract the entire database"""
+    if not await is_admin(update.effective_user.id):
+        await update.message.reply_text("❌ ليس لديك صلاحية الدخول.")
+        return
+    
+    try:
+        backup_file = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+        async with aiosqlite.connect(DATABASE) as src:
+            async with aiosqlite.connect(backup_file) as dst:
+                await src.backup(dst)
+        
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=open(backup_file, 'rb'),
+            caption="💾 نسخة احتياطية من قاعدة البيانات"
+        )
+        
+    except Exception as e:
+        logger.error(f"Extract failed: {e}")
+        await update.message.reply_text("❌ فشل استخراج قاعدة البيانات")
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Handle errors globally"""
     logger.error("Exception while handling update:", exc_info=context.error)
@@ -767,6 +938,13 @@ async def main():
     application.add_handler(CallbackQueryHandler(handle_admin_users, pattern="^admin_users$"))
     application.add_handler(broadcast_handler)
     application.add_handler(CallbackQueryHandler(admin_back, pattern="^admin_back$"))
+    
+    # Add the new admin command handlers
+    application.add_handler(CommandHandler('export', export_data))
+    application.add_handler(CommandHandler('broadcast', broadcast_message))
+    application.add_handler(CommandHandler('reply', reply_to_user))
+    application.add_handler(CommandHandler('import', import_data))
+    application.add_handler(CommandHandler('extract', extract_database))
     
     # Error handler
     application.add_error_handler(error_handler)
