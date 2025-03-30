@@ -278,7 +278,7 @@ async def is_admin(user_id: int) -> bool:
         async with aiosqlite.connect(DATABASE) as db:
             cursor = await db.execute(
                 "SELECT admin FROM users WHERE telegram_id = ?",
-                (user_id,)
+                (user.id,)
             )
             result = await cursor.fetchone()
             return result and result[0] == 1
@@ -560,6 +560,7 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
             cursor = await db.execute(
                 "SELECT banned, frozen FROM users WHERE telegram_id = ?",
                 (user.id,)
+            )
             user_status = await cursor.fetchone()
             
             if user_status and (user_status[0] or user_status[1]):
@@ -572,6 +573,7 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
             cursor = await db.execute(
                 "SELECT location FROM users WHERE telegram_id = ?",
                 (user.id,)
+            )
             user_location = await cursor.fetchone()
             
             if not user_location or not user_location[0]:
@@ -585,7 +587,8 @@ async def show_nearby_profiles(update: Update, context: ContextTypes.DEFAULT_TYP
             # Get all nearby users (within 50km)
             cursor = await db.execute(
                 "SELECT * FROM users WHERE telegram_id != ? AND banned = 0 AND frozen = 0",
-                (user.id,))
+                (user.id,)
+            )
             users = await cursor.fetchall()
             
             nearby_users = []
