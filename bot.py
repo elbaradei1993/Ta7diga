@@ -39,7 +39,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-BOT_TOKEN = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")  # REPLACE WITH YOUR ACTUAL TOKEN
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")  # REPLACE WITH YOUR ACTUAL TOKEN
 DATABASE = os.getenv("DATABASE", "users.db")
 ADMIN_ID = 1796978458  # REPLACE WITH YOUR TELEGRAM USER ID
 BACKUP_DIR = "backups"
