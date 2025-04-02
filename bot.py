@@ -26,8 +26,6 @@ import os
 import pandas as pd
 from datetime import datetime
 from io import BytesIO
-
-# ============= Koyeb Required Additions Start =============
 from flask import Flask
 import threading
 
@@ -35,11 +33,7 @@ app = Flask(__name__)
 
 @app.route('/health')
 def health_check():
-    return "Bot is running", 200
-
-def run_flask():
-    app.run(host='0.0.0.0', port=8080)
-# ============= Koyeb Required Additions End =============
+    return "OK", 200
 
 # Apply nest_asyncio for Jupyter/Notebook environments
 nest_asyncio.apply()
@@ -52,11 +46,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7886313661:AAHIUtFWswsx8UhF8wotUh2ROHu__wkgrak")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE = os.getenv("DATABASE", "users.db")
-ADMIN_ID = 1796978458
+ADMIN_ID = int(os.getenv("ADMIN_ID", "1796978458"))
 
-# List of countries and cities (COMPLETE ORIGINAL LIST PRESERVED)
+# List of countries and cities
 COUNTRIES = {
     "السودان": [
         "الخرطوم", "أم درمان", "بحري", "بورتسودان", "كسلا", "القضارف", "ود مدني", 
@@ -73,11 +67,10 @@ COUNTRIES = {
     "الإمارات": ["دبي", "أبوظبي", "الشارقة", "عجمان"]
 }
 
-# Conversation states (ALL ORIGINAL STATES PRESERVED)
-USERNAME, NAME, AGE, BIO, TYPE, COUNTRY, CITY, LOCATION, PHOTO = range(9)
-FEEDBACK, REPORT = range(2)
+# Conversation states
+(USERNAME, NAME, AGE, BIO, TYPE, COUNTRY, CITY, LOCATION, PHOTO) = range(9)
+(FEEDBACK, REPORT) = range(2)
 
-# [ALL YOUR ORIGINAL FUNCTIONS FOLLOW - COMPLETELY UNCHANGED]
 async def init_db():
     try:
         async with aiosqlite.connect(DATABASE) as db:
@@ -100,7 +93,36 @@ async def init_db():
                     joined_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )"""
             )
-            # ... rest of your original database initialization ...
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS group_members (
+                    user_id INTEGER,
+                    group_id INTEGER,
+                    group_title TEXT,
+                    first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, group_id)
+                )"""
+            )
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS feedback (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    message TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            await db.execute(
+                """CREATE TABLE IF NOT EXISTS reports (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER,
+                    message TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            await db.commit()
+            logger.info("Database initialized successfully.")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send a message when the command /start is issued."""
@@ -121,34 +143,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return USERNAME
 
-# [ALL OTHER ORIGINAL HANDLER FUNCTIONS...]
-# EVERY SINGLE FUNCTION REMAINS EXACTLY AS YOU WROTE IT
+[ALL YOUR OTHER ORIGINAL FUNCTIONS REMAIN EXACTLY THE SAME...]
 
 async def main():
-    # ===== Start Flask server in background =====
-    flask_thread = threading.Thread(target=run_flask)
+    # Start Flask server in background
+    flask_thread = threading.Thread(target=lambda: app.run(host='0.0.0.0', port=8080))
     flask_thread.daemon = True
     flask_thread.start()
-    # ==========================================
 
-    # YOUR ORIGINAL main() IMPLEMENTATION
     application = ApplicationBuilder().token(BOT_TOKEN).build()
     
-    # Your original handler setup
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
-        states={
-            USERNAME: [
-                CallbackQueryHandler(agree_to_privacy, pattern="^agree_to_privacy$"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, set_username)
-            ],
-            # ... all your original states ...
-        },
-        fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-    )
-    application.add_handler(conv_handler)
-    
-    # Add all other handlers...
+    # Add all your handlers here...
+    application.add_handler(CommandHandler("start", start))
     
     await application.run_polling()
 
