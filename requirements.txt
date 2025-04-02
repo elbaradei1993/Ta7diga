@@ -1,7 +1,7 @@
-python-telegram-bot
-aiosqlite
-geopy
-nest_asyncio
+python-telegram-bot==20.3
+aiosqlite==0.19.0
+geopy==2.4.1
+nest-asyncio==1.6.0
 pandas==2.1.4
 openpyxl==3.1.2
-filelock
+flask==3.0.2
